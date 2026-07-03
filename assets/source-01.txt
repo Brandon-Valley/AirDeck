@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+<meta name="theme-color" content="#0a0a0d" />
+<meta name="airdeck-build" content="2026-07-03-both-mobile-fix" />
+<title>AIR DECK '99</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Space+Grotesk:wght@500;700&display=swap');
+  :root{
+    --ink:#09090c; --paper:#eee9d8; --acid:#d8ff37; --hot:#ff3ca6;
+    --cyan:#31dcff; --orange:#ff7d2d; --white:#fffdf7; --muted:#a9a7b1;
+    --good:#73ff7c; --bad:#ff496c; --warn:#ffd93d;
+    --safe-bottom:max(16px,env(safe-area-inset-bottom));
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;height:100dvh;margin:0;background:var(--ink);color:var(--white);font-family:"Space Grotesk",system-ui,sans-serif;overflow:hidden}
+  body:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.13;z-index:90;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='90' height='90'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.92' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.65'/%3E%3C/svg%3E")}
+  button,input{font:inherit}
+  button{border:0;color:inherit}
+  .app{height:100%;height:100dvh;display:flex;flex-direction:column;position:relative;background:
+    radial-gradient(circle at 85% 6%,rgba(255,60,166,.24),transparent 26%),
+    radial-gradient(circle at 5% 70%,rgba(49,220,255,.17),transparent 30%),
+    #0b0b10}
+  .checker{background-image:linear-gradient(45deg,#17171d 25%,transparent 25%),linear-gradient(-45deg,#17171d 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#17171d 75%),linear-gradient(-45deg,transparent 75%,#17171d 75%);background-size:26px 26px;background-position:0 0,0 13px,13px -13px,-13px 0}
+  header{height:64px;flex:none;display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:2px solid #292931;background:#0b0b10ee;z-index:20}
+  .logo{font-family:"Permanent Marker",Impact,sans-serif;font-size:24px;line-height:.9;transform:rotate(-2deg);color:var(--acid);text-shadow:3px 3px 0 var(--hot);white-space:nowrap}
+  .logo small{display:block;font-family:"Space Grotesk";font-size:8px;letter-spacing:2.2px;color:white;text-shadow:none;margin-left:3px;margin-top:4px}
+  .spacer{flex:1;min-width:0}
+  .iconbtn,.chip{height:40px;border:2px solid #3b3b45;background:#17171e;border-radius:12px;display:grid;place-items:center;min-width:40px;padding:0 10px;font-weight:900;box-shadow:0 4px 0 #000;cursor:pointer}
+  #soundBtn{width:44px;min-width:44px;max-width:44px;padding:0 2px;font-size:9px;line-height:1;letter-spacing:0;white-space:nowrap;overflow:hidden;text-overflow:clip}
+  #helpBtn{width:40px;min-width:40px;max-width:40px;padding:0}
+  .iconbtn:active,.chip:active,.bigbtn:active,.mode-tape:active{transform:translateY(3px);box-shadow:0 1px 0 #000}
+  .model-toggle{display:flex;background:#121218;border:2px solid #383840;border-radius:12px;padding:3px;box-shadow:0 4px 0 #000}
+  .model-toggle button{height:31px;padding:0 10px;border-radius:8px;background:transparent;color:#85838f;font-size:11px;font-weight:900;letter-spacing:.5px}
+  .model-toggle button.on{background:var(--cyan);color:#09090c}
+  main{position:relative;flex:1;min-height:0;overflow:hidden}
+  .screen{position:absolute;inset:0;overflow-y:auto;overscroll-behavior:contain;padding:16px 14px calc(var(--safe-bottom) + 18px);display:none}
+  .screen.active{display:block;animation:slam .26s ease-out}
+  @keyframes slam{from{opacity:0;transform:scale(.97) translateY(8px)}to{opacity:1;transform:none}}
+  .hero{min-height:186px;position:relative;padding:10px 8px 0;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .hero-title{font-family:"Permanent Marker";font-size:clamp(52px,16vw,88px);line-height:.8;text-align:center;transform:rotate(-4deg);color:var(--paper);text-shadow:6px 6px 0 var(--hot),-3px -3px 0 var(--cyan);position:relative;z-index:2}
+  .hero-title span{color:var(--acid)}
+  .hero-sub{text-align:center;color:#c8c5ce;font-size:12px;letter-spacing:2.5px;text-transform:uppercase;margin:12px auto 14px}
+  .scribble{position:absolute;border:7px solid var(--acid);width:122px;height:64px;border-radius:50%;transform:rotate(18deg);opacity:.8}
+  .scribble.s2{width:240px;height:95px;border-color:var(--cyan);transform:rotate(-16deg);opacity:.35}
+  .warning-strip{background:var(--warn);color:#111;font-weight:900;font-size:11px;letter-spacing:.6px;padding:8px 12px;margin:4px -14px 14px;transform:rotate(-.6deg);text-align:center;border-block:2px solid #111}
+  .modes{display:grid;grid-template-columns:1fr 1fr;gap:13px;max-width:640px;margin:0 auto}
+  .mode-tape{min-height:118px;padding:13px 12px 11px;text-align:left;position:relative;cursor:pointer;background:var(--paper);color:#111;box-shadow:7px 8px 0 #000;border:2px solid #09090c;transform:rotate(-1.2deg);overflow:hidden}
+  .mode-tape:nth-child(even){transform:rotate(1.5deg)}
+  .mode-tape:nth-child(3n){background:var(--cyan)}
+  .mode-tape:nth-child(4n){background:var(--hot);color:white}
+  .mode-tape:nth-child(5n){background:var(--acid)}
+  .mode-tape .num{position:absolute;right:7px;top:-10px;font:52px "Permanent Marker";opacity:.17}
+  .mode-tape h3{font:22px/1 "Permanent Marker";margin:0 0 7px;text-transform:uppercase}
+  .mode-tape p{
