@@ -1,0 +1,68 @@
+name: Verify GitHub Pages deployment
+
+on:
+  push:
+    branches: [master]
+    paths: [index.html]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: verify-airdeck-pages
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for the new Pages build
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 36); do
+            page="$(curl --fail --silent --show-error --location --max-time 20 \
+              -H 'Cache-Control: no-cache' \
+              "https://brandon-valley.github.io/AirDeck/?deploy=${GITHUB_SHA}-${attempt}" || true)"
+            if printf '%s' "$page" | grep -q 'airdeck-loader-build" content="2026-07-03-both-mobile-fix"'; then
+              echo "Verified deployed build on attempt ${attempt}."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "The expected build marker did not appear on GitHub Pages in time." >&2
+          exit 1
+
+      - name: Record successful verification
+        uses: actions/github-script@v7
+        env:
+          VERIFIED_SHA: ${{ github.sha }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const path = 'deployment-verification.json';
+            const branch = 'master';
+            let existingSha;
+            try {
+              const current = await github.rest.repos.getContent({ owner, repo, path, ref: branch });
+              existingSha = current.data.sha;
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+            const payload = {
+              verified_commit: process.env.VERIFIED_SHA,
+              verified_build: '2026-07-03-both-mobile-fix',
+              verified_url: 'https://brandon-valley.github.io/AirDeck/',
+              verified_at: new Date().toISOString()
+            };
+            await github.rest.repos.createOrUpdateFileContents({
+              owner,
+              repo,
+              path,
+              branch,
+              message: 'Record verified AirDeck Pages deployment',
+              content: Buffer.from(JSON.stringify(payload, null, 2) + '\n').toString('base64'),
+              ...(existingSha ? { sha: existingSha } : {})
+            });
