@@ -3,7 +3,9 @@ name: Verify GitHub Pages deployment
 on:
   push:
     branches: [master]
-    paths: [index.html]
+    paths:
+      - index.html
+      - .github/workflows/verify-pages.yml
 
 permissions:
   contents: write
