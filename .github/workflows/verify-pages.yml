@@ -22,6 +22,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # This marker check confirms the exact AirDeck build is live, not merely committed.
           for attempt in $(seq 1 36); do
             page="$(curl --fail --silent --show-error --location --max-time 20 \
               -H 'Cache-Control: no-cache' \
