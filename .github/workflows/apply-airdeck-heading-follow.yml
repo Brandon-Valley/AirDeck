@@ -1,4 +1,4 @@
-name: Force and verify AirDeck stable heading Pages
+name: Diagnose and verify AirDeck stable heading Pages
 
 on:
   push:
@@ -11,12 +11,12 @@ permissions:
   pages: write
 
 concurrency:
-  group: force-airdeck-stable-heading-pages
+  group: diagnose-airdeck-stable-heading-pages
   cancel-in-progress: true
 
 jobs:
-  deploy-and-verify:
-    if: github.event.head_commit.message == 'Force AirDeck stable heading Pages rebuild'
+  diagnose-and-verify:
+    if: github.event.head_commit.message == 'Diagnose AirDeck stable heading Pages deployment'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,68 +29,107 @@ jobs:
           grep -q 'function unwrapHeading' index.html
           test "$(wc -c < index.html)" -gt 80000
 
-      - name: Request a GitHub Pages rebuild
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            try {
-              await github.rest.repos.requestPagesBuild({
-                owner: context.repo.owner,
-                repo: context.repo.repo
-              });
-              core.info('Requested a Pages rebuild from the configured master source.');
-            } catch (error) {
-              core.warning(`Pages rebuild request returned ${error.status || 'an error'}; continuing to live verification.`);
-            }
-
-      - name: Wait for the main GitHub Pages URL
-        shell: bash
-        run: |
-          set -euo pipefail
-          for attempt in $(seq 1 90); do
-            page="$(curl --fail --silent --show-error --location --max-time 25 \
-              -H 'Cache-Control: no-cache' \
-              "https://brandon-valley.github.io/AirDeck/?stable-heading=${GITHUB_RUN_ID}-${attempt}" || true)"
-            bytes="$(echo -n "$page" | wc -c)"
-            if echo "$page" | grep -q 'airdeck-build" content="2026-07-04-stable-heading-lock"' \
-              && [ "$bytes" -gt 80000 ]; then
-              echo "Verified live AirDeck on attempt $attempt: $bytes bytes."
-              exit 0
-            fi
-            sleep 10
-          done
-          echo "The stable-heading build did not appear on the main Pages URL in time." >&2
-          exit 1
-
-      - name: Record successful Pages verification
+      - name: Inspect Pages, request rebuild, and verify the main URL
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
-            const path = 'deployment-verification.json';
             const branch = 'master';
-            let existingSha;
-            try {
-              const current = await github.rest.repos.getContent({ owner, repo, path, ref: branch });
-              existingSha = current.data.sha;
-            } catch (error) {
-              if (error.status !== 404) throw error;
+            const expected = '2026-07-04-stable-heading-lock';
+            const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+            async function writeFile(path, value, message) {
+              let sha;
+              try {
+                const current = await github.rest.repos.getContent({ owner, repo, path, ref: branch });
+                sha = current.data.sha;
+              } catch (error) {
+                if (error.status !== 404) throw error;
+              }
+              await github.rest.repos.createOrUpdateFileContents({
+                owner,
+                repo,
+                path,
+                branch,
+                message,
+                content: Buffer.from(JSON.stringify(value, null, 2) + '\n').toString('base64'),
+                ...(sha ? { sha } : {})
+              });
             }
-            const payload = {
-              verified_build: '2026-07-04-stable-heading-lock',
+
+            let site = null;
+            let requestResult = null;
+            try {
+              const response = await github.rest.repos.getPages({ owner, repo });
+              site = response.data;
+            } catch (error) {
+              site = { error_status: error.status, error_message: error.message };
+            }
+            try {
+              const response = await github.rest.repos.requestPagesBuild({ owner, repo });
+              requestResult = { status: response.status, data: response.data };
+            } catch (error) {
+              requestResult = { error_status: error.status, error_message: error.message };
+            }
+
+            await writeFile('pages-diagnostic.json', {
+              checked_at: new Date().toISOString(),
+              expected_build: expected,
+              pages: site,
+              rebuild_request: requestResult
+            }, 'Record AirDeck Pages deployment diagnostic');
+
+            let verified = false;
+            let bytes = 0;
+            let latestBuild = null;
+            let lastFetchError = null;
+            for (let attempt = 1; attempt <= 90; attempt++) {
+              try {
+                const response = await github.rest.repos.getLatestPagesBuild({ owner, repo });
+                latestBuild = response.data;
+              } catch (error) {
+                latestBuild = { error_status: error.status, error_message: error.message };
+              }
+              try {
+                const response = await fetch(`https://brandon-valley.github.io/AirDeck/?stable-heading=${context.runId}-${attempt}`, {
+                  headers: { 'cache-control': 'no-cache' },
+                  redirect: 'follow'
+                });
+                const text = await response.text();
+                bytes = text.length;
+                lastFetchError = response.ok ? null : `HTTP ${response.status}`;
+                if (response.ok && bytes > 80000 && text.includes(`airdeck-build\" content=\"${expected}`)) {
+                  verified = true;
+                  break;
+                }
+              } catch (error) {
+                lastFetchError = error.message;
+              }
+              await sleep(10000);
+            }
+
+            if (!verified) {
+              await writeFile('pages-diagnostic.json', {
+                checked_at: new Date().toISOString(),
+                expected_build: expected,
+                pages: site,
+                rebuild_request: requestResult,
+                latest_build: latestBuild,
+                live_bytes: bytes,
+                live_fetch_error: lastFetchError,
+                verified: false
+              }, 'Update AirDeck Pages deployment diagnostic');
+              core.setFailed('The expected build was not returned by the main Pages URL in time.');
+              return;
+            }
+
+            await writeFile('deployment-verification.json', {
+              verified_build: expected,
               verified_url: 'https://brandon-valley.github.io/AirDeck/',
               verified_at: new Date().toISOString(),
+              live_bytes: bytes,
+              latest_pages_build: latestBuild,
               verification: 'main Pages URL returned the complete standalone index with the expected build marker'
-            };
-            await github.rest.repos.createOrUpdateFileContents({
-              owner,
-              repo,
-              path,
-              branch,
-              message: 'Record verified AirDeck stable heading deployment',
-              content: Buffer.from(JSON.stringify(payload, null, 2) + '\n').toString('base64'),
-              ...(existingSha ? { sha: existingSha } : {})
-            });
+            }, 'Record verified AirDeck stable heading deployment');
