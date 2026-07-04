@@ -1,4 +1,4 @@
-name: Verify AirDeck heading follow live
+name: Apply and verify AirDeck stable flat heading
 
 on:
   push:
@@ -9,12 +9,164 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: apply-airdeck-stable-flat-heading
+  cancel-in-progress: true
+
 jobs:
-  verify:
-    if: github.event.head_commit.message == 'Run AirDeck heading live verification'
+  apply:
+    if: github.event.head_commit.message == 'Install AirDeck stable flat heading patch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Replace unstable flat-phone heading calculation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('index.html')
+          text = path.read_text()
+
+          def replace_once(old, new, label):
+              global text
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected one match, found {count}')
+              text = text.replace(old, new, 1)
+
+          replace_once(
+              '2026-07-04-heading-follow-lock',
+              '2026-07-04-stable-heading-lock',
+              'build marker',
+          )
+          replace_once(
+              'headingYaw:0,headingLocked:false,',
+              'headingYaw:0,rawHeading:0,headingLocked:false,',
+              'sensor heading state',
+          )
+          replace_once(
+          '''const headingAxis=new THREE.Vector3(0,1,0);
+          const headingProbe=new THREE.Vector3();
+          function screenHeading(q,fallback=0){
+            headingProbe.set(0,0,1).applyQuaternion(q);
+            const horizontal=Math.hypot(headingProbe.x,headingProbe.z);
+            if(horizontal<.08)return fallback;
+            return Math.atan2(headingProbe.x,headingProbe.z);
+          }
+          function updateHeadingCompensation(q,force=false){
+            // In-hand behavior: continuously remove only compass heading. Pitch and roll remain real.
+            if(force||!sensor.orientationReferenceReady||!sensor.headingLocked){
+              sensor.headingYaw=screenHeading(q,sensor.headingYaw);
+              sensor.orientationReferenceQ.setFromAxisAngle(headingAxis,sensor.headingYaw);
+              sensor.orientationReferenceReady=true;
+            }
+            sensor.relativeOrientationQ.copy(sensor.orientationReferenceQ).invert().multiply(q).normalize();
+            return sensor.relativeOrientationQ;
+          }
+          function lockHeadingForThrow(){
+            if(!sensor.orientationReferenceReady)updateHeadingCompensation(sensor.orientationQ,true);
+            sensor.headingLocked=true;
+            updateHeadingCompensation(sensor.orientationQ,false);
+          }
+          function unlockHeadingAfterThrow(){
+            sensor.headingLocked=false;
+            if(sensor.orientationSeen){
+              updateHeadingCompensation(sensor.orientationQ,true);
+              liveQuat.copy(sensor.relativeOrientationQ);
+            }
+          }''',
+          '''const headingAxis=new THREE.Vector3(0,1,0);
+          function unwrapHeading(next,previous){
+            if(!Number.isFinite(previous))return next;
+            while(next-previous>Math.PI)next-=Math.PI*2;
+            while(next-previous<-Math.PI)next+=Math.PI*2;
+            return next;
+          }
+          function updateHeadingCompensation(q,rawHeading=sensor.rawHeading,force=false){
+            // DeviceOrientation alpha is the world-vertical heading component used to build q.
+            // Removing alpha directly preserves the phone's real pitch and roll, even when flat.
+            if(force||!sensor.orientationReferenceReady||!sensor.headingLocked){
+              sensor.rawHeading=rawHeading;
+              sensor.headingYaw=unwrapHeading(rawHeading,sensor.headingYaw);
+              sensor.orientationReferenceQ.setFromAxisAngle(headingAxis,sensor.headingYaw);
+              sensor.orientationReferenceReady=true;
+            }
+            sensor.relativeOrientationQ.copy(sensor.orientationReferenceQ).invert().multiply(q).normalize();
+            return sensor.relativeOrientationQ;
+          }
+          function lockHeadingForThrow(){
+            if(!sensor.orientationReferenceReady)updateHeadingCompensation(sensor.orientationQ,sensor.rawHeading,true);
+            sensor.headingLocked=true;
+            updateHeadingCompensation(sensor.orientationQ,sensor.rawHeading,false);
+          }
+          function unlockHeadingAfterThrow(){
+            sensor.headingLocked=false;
+            if(sensor.orientationSeen){
+              updateHeadingCompensation(sensor.orientationQ,sensor.rawHeading,true);
+              liveQuat.copy(sensor.relativeOrientationQ);
+            }
+          }''',
+              'heading functions',
+          )
+          replace_once(
+              'const alpha=rad(e.alpha),beta=rad(e.beta),gamma=rad(e.gamma),orient=rad(sensor.screenAngle);',
+              'const alpha=rad(e.alpha),beta=rad(e.beta),gamma=rad(e.gamma),orient=rad(sensor.screenAngle);sensor.rawHeading=alpha;',
+              'raw alpha storage',
+          )
+          replace_once(
+              'updateHeadingCompensation(q);',
+              'updateHeadingCompensation(q,alpha);',
+              'orientation heading call',
+          )
+          replace_once(
+              "nerdValue('nHeadingDeg',fmt(deg(sensor.headingYaw)));",
+              "nerdValue('nHeadingDeg',fmt(((deg(sensor.headingYaw)%360)+360)%360));",
+              'heading display normalization',
+          )
+          replace_once(
+              'sensor.relativeOrientationQ.identity();sensor.headingYaw=0;sensor.orientationLast=0;',
+              'sensor.relativeOrientationQ.identity();sensor.headingYaw=0;sensor.rawHeading=0;sensor.orientationLast=0;',
+              'heading reset state',
+          )
+          replace_once(
+              'updateHeadingCompensation(sensor.orientationQ,true);',
+              'updateHeadingCompensation(sensor.orientationQ,sensor.rawHeading,true);',
+              'manual heading reset',
+          )
+
+          path.write_text(text)
+          PY
+          grep -q 'airdeck-build" content="2026-07-04-stable-heading-lock"' index.html
+          grep -q 'function unwrapHeading' index.html
+          test "$(wc -c < index.html)" -gt 80000
+
+      - name: Validate module JavaScript
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          text = Path('index.html').read_text()
+          scripts = re.findall(r'<script type="module">(.*?)</script>', text, re.S)
+          if len(scripts) != 1:
+              raise SystemExit(f'Expected one module script, found {len(scripts)}')
+          Path('/tmp/airdeck.mjs').write_text(scripts[0])
+          PY
+          node --check /tmp/airdeck.mjs
+
+      - name: Commit index.html directly to master
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git commit -m "Stabilize AirDeck heading while phone is flat"
+          git push origin master
 
       - name: Wait for the main GitHub Pages URL
         shell: bash
@@ -23,19 +175,19 @@ jobs:
           for attempt in $(seq 1 60); do
             page="$(curl --fail --silent --show-error --location --max-time 25 \
               -H 'Cache-Control: no-cache' \
-              "https://brandon-valley.github.io/AirDeck/?heading-live=${GITHUB_RUN_ID}-${attempt}" || true)"
+              "https://brandon-valley.github.io/AirDeck/?stable-heading=${GITHUB_RUN_ID}-${attempt}" || true)"
             bytes="$(echo -n "$page" | wc -c)"
-            if echo "$page" | grep -q 'airdeck-build" content="2026-07-04-heading-follow-lock"' \
+            if echo "$page" | grep -q 'airdeck-build" content="2026-07-04-stable-heading-lock"' \
               && [ "$bytes" -gt 80000 ]; then
               echo "Verified live AirDeck on attempt $attempt: $bytes bytes."
               exit 0
             fi
             sleep 10
           done
-          echo "The heading-follow build did not appear on the main Pages URL in time." >&2
+          echo "The stable-heading build did not appear on the main Pages URL in time." >&2
           exit 1
 
-      - name: Record successful verification
+      - name: Record successful Pages verification
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -52,7 +204,7 @@ jobs:
               if (error.status !== 404) throw error;
             }
             const payload = {
-              verified_build: '2026-07-04-heading-follow-lock',
+              verified_build: '2026-07-04-stable-heading-lock',
               verified_url: 'https://brandon-valley.github.io/AirDeck/',
               verified_at: new Date().toISOString(),
               verification: 'main Pages URL returned the complete standalone index with the expected build marker'
@@ -62,7 +214,7 @@ jobs:
               repo,
               path,
               branch,
-              message: 'Record verified AirDeck heading follow deployment',
+              message: 'Record verified AirDeck stable heading deployment',
               content: Buffer.from(JSON.stringify(payload, null, 2) + '\n').toString('base64'),
               ...(existingSha ? { sha: existingSha } : {})
             });
