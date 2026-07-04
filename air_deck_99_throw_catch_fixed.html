@@ -1,0 +1,1101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+<meta name="theme-color" content="#0a0a0d" />
+<meta name="airdeck-build" content="2026-07-04-throw-catch-state-machine" />
+<title>AIR DECK '99</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Space+Grotesk:wght@500;700&display=swap');
+  :root{
+    --ink:#09090c; --paper:#eee9d8; --acid:#d8ff37; --hot:#ff3ca6;
+    --cyan:#31dcff; --orange:#ff7d2d; --white:#fffdf7; --muted:#a9a7b1;
+    --good:#73ff7c; --bad:#ff496c; --warn:#ffd93d;
+    --safe-bottom:max(16px,env(safe-area-inset-bottom));
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;height:100dvh;margin:0;background:var(--ink);color:var(--white);font-family:"Space Grotesk",system-ui,sans-serif;overflow:hidden}
+  body:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.13;z-index:90;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='90' height='90'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.92' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.65'/%3E%3C/svg%3E")}
+  button,input{font:inherit}
+  button{border:0;color:inherit}
+  .app{height:100%;height:100dvh;display:flex;flex-direction:column;position:relative;background:
+    radial-gradient(circle at 85% 6%,rgba(255,60,166,.24),transparent 26%),
+    radial-gradient(circle at 5% 70%,rgba(49,220,255,.17),transparent 30%),
+    #0b0b10}
+  .checker{background-image:linear-gradient(45deg,#17171d 25%,transparent 25%),linear-gradient(-45deg,#17171d 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#17171d 75%),linear-gradient(-45deg,transparent 75%,#17171d 75%);background-size:26px 26px;background-position:0 0,0 13px,13px -13px,-13px 0}
+  header{height:64px;flex:none;display:flex;align-items:center;gap:7px;padding:9px 10px;border-bottom:2px solid #292931;background:#0b0b10ee;z-index:20}
+  .logo{font-family:"Permanent Marker",Impact,sans-serif;font-size:24px;line-height:.9;transform:rotate(-2deg);color:var(--acid);text-shadow:3px 3px 0 var(--hot);white-space:nowrap}
+  .logo small{display:block;font-family:"Space Grotesk";font-size:8px;letter-spacing:2.2px;color:white;text-shadow:none;margin-left:3px;margin-top:4px}
+  .spacer{flex:1;min-width:0}
+  .iconbtn,.chip{height:40px;border:2px solid #3b3b45;background:#17171e;border-radius:12px;display:grid;place-items:center;min-width:40px;padding:0 10px;font-weight:900;box-shadow:0 4px 0 #000;cursor:pointer}
+  #soundBtn{width:44px;min-width:44px;max-width:44px;padding:0 2px;font-size:9px;line-height:1;letter-spacing:0;white-space:nowrap;overflow:hidden;text-overflow:clip}
+  #helpBtn{width:40px;min-width:40px;max-width:40px;padding:0}
+  .iconbtn:active,.chip:active,.bigbtn:active,.mode-tape:active{transform:translateY(3px);box-shadow:0 1px 0 #000}
+  .model-toggle{display:flex;flex:0 0 auto;background:#121218;border:2px solid #383840;border-radius:11px;padding:2px;box-shadow:0 4px 0 #000}
+  .model-toggle button{height:29px;min-width:0;padding:0 7px;border-radius:7px;background:transparent;color:#85838f;font-size:9px;font-weight:900;letter-spacing:.25px}
+  .model-toggle button.on{background:var(--cyan);color:#09090c}
+  main{position:relative;flex:1;min-height:0;overflow:hidden}
+  .screen{position:absolute;inset:0;overflow-y:auto;overscroll-behavior:contain;padding:16px 14px calc(var(--safe-bottom) + 18px);display:none}
+  .screen.active{display:block;animation:slam .26s ease-out}
+  @keyframes slam{from{opacity:0;transform:scale(.97) translateY(8px)}to{opacity:1;transform:none}}
+  .hero{min-height:186px;position:relative;padding:10px 8px 0;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .hero-title{font-family:"Permanent Marker";font-size:clamp(52px,16vw,88px);line-height:.8;text-align:center;transform:rotate(-4deg);color:var(--paper);text-shadow:6px 6px 0 var(--hot),-3px -3px 0 var(--cyan);position:relative;z-index:2}
+  .hero-title span{color:var(--acid)}
+  .hero-sub{text-align:center;color:#c8c5ce;font-size:12px;letter-spacing:2.5px;text-transform:uppercase;margin:12px auto 14px}
+  .scribble{position:absolute;border:7px solid var(--acid);width:122px;height:64px;border-radius:50%;transform:rotate(18deg);opacity:.8}
+  .scribble.s2{width:240px;height:95px;border-color:var(--cyan);transform:rotate(-16deg);opacity:.35}
+  .warning-strip{background:var(--warn);color:#111;font-weight:900;font-size:11px;letter-spacing:.6px;padding:8px 12px;margin:4px -14px 14px;transform:rotate(-.6deg);text-align:center;border-block:2px solid #111}
+  .modes{display:grid;grid-template-columns:1fr 1fr;gap:13px;max-width:640px;margin:0 auto}
+  .mode-tape{min-height:118px;padding:13px 12px 11px;text-align:left;position:relative;cursor:pointer;background:var(--paper);color:#111;box-shadow:7px 8px 0 #000;border:2px solid #09090c;transform:rotate(-1.2deg);overflow:hidden}
+  .mode-tape:nth-child(even){transform:rotate(1.5deg)}
+  .mode-tape:nth-child(3n){background:var(--cyan)}
+  .mode-tape:nth-child(4n){background:var(--hot);color:white}
+  .mode-tape:nth-child(5n){background:var(--acid)}
+  .mode-tape .num{position:absolute;right:7px;top:-10px;font:52px "Permanent Marker";opacity:.17}
+  .mode-tape h3{font:22px/1 "Permanent Marker";margin:0 0 7px;text-transform:uppercase}
+  .mode-tape p{font-size:11px;line-height:1.25;margin:0;font-weight:700;max-width:90%}
+  .mode-tape .tag{display:inline-block;margin-top:8px;background:#0c0c10;color:white;padding:3px 6px;font-size:8px;letter-spacing:1px;text-transform:uppercase}
+  .mode-tape[data-mode="nerd"]{grid-column:1/-1;min-height:104px;background:#111118;color:var(--acid);border-color:var(--cyan);box-shadow:7px 8px 0 var(--hot)}
+  .mode-tape[data-mode="nerd"] p{color:#d3d1dc;max-width:78%}
+  .mode-tape[data-mode="nerd"] .tag{background:var(--cyan);color:#09090c}
+  .footer-note{text-align:center;color:#777680;font-size:10px;max-width:540px;margin:22px auto 0;line-height:1.45}
+
+  /* Play screen */
+  #playScreen{padding:0;overflow:hidden}
+  #playScreen.active{display:flex;flex-direction:column}
+  .stage{height:auto;flex:0 0 clamp(250px,43dvh,430px);min-height:0;position:relative;overflow:hidden;background:
+    linear-gradient(180deg,#13131a 0%,#0b0b10 74%,#16161c 74%);border-bottom:3px solid #26262e}
+  #threeCanvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+  .stage:after{content:"";position:absolute;left:-10%;right:-10%;bottom:-44px;height:120px;transform:perspective(260px) rotateX(65deg);background-size:32px 32px;background-image:linear-gradient(#292932 2px,transparent 2px),linear-gradient(90deg,#292932 2px,transparent 2px);opacity:.66;pointer-events:none}
+  .stage-top{position:absolute;z-index:4;top:10px;left:10px;right:10px;display:flex;align-items:flex-start;gap:8px;pointer-events:none}
+  .stage-top>*{pointer-events:auto}
+  .back{background:#111117;border:2px solid #42424b}
+  .mode-label{background:var(--acid);color:#111;padding:7px 10px;transform:rotate(-2deg);font:16px "Permanent Marker";box-shadow:4px 4px 0 #000;max-width:55%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .live-pill{margin-left:auto;background:#121218cc;border:2px solid #373740;border-radius:10px;padding:6px 8px;font-size:9px;letter-spacing:1px;color:#aaa;min-width:94px}
+  .live-pill b{color:var(--good)}
+  .target-banner{position:absolute;z-index:5;left:50%;top:58px;transform:translateX(-50%) rotate(-2deg);text-align:center;width:min(92%,500px);pointer-events:none}
+  .target-kicker{font-size:9px;letter-spacing:3px;text-transform:uppercase;color:var(--cyan);font-weight:900;text-shadow:2px 2px #000}
+  .target-name{font:clamp(28px,9vw,50px)/.95 "Permanent Marker";text-transform:uppercase;text-shadow:4px 4px 0 #000;color:white}
+  .target-name.hot{color:var(--acid)}
+  .hud{position:absolute;z-index:5;left:10px;right:10px;bottom:10px;display:flex;align-items:flex-end;gap:8px;pointer-events:none}
+  .score-sticker{background:var(--hot);padding:7px 11px;transform:rotate(-2deg);box-shadow:4px 4px 0 #000;font-weight:900;min-width:80px}
+  .score-sticker small{display:block;font-size:8px;letter-spacing:1.5px}.score-sticker strong{font:25px/1 "Permanent Marker"}
+  .letters{margin-left:auto;display:flex;flex-direction:column;gap:3px;align-items:flex-end}
+  .skate-line{display:flex;gap:2px;align-items:center}.skate-line small{width:48px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;font-size:7px;color:#aaa;margin-right:2px}
+  .letters span{width:18px;height:20px;display:grid;place-items:center;background:#22222b;color:#666;border:1px solid #3d3d46;font:12px "Permanent Marker";transform:rotate(var(--r,-2deg))}
+  .letters span.got{background:var(--bad);color:white;border-color:white}
+  .player-chip{background:#101016d9;border:2px solid #3c3c46;padding:7px 9px;border-radius:10px;font-size:10px;box-shadow:3px 3px 0 #000}
+  .player-chip b{display:block;color:var(--cyan);font-size:13px}
+
+  .panel{height:auto;flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:14px 14px calc(var(--safe-bottom) + 104px);background:#0c0c11;position:relative}
+  .status-row{display:flex;gap:10px;align-items:stretch;max-width:700px;margin:auto}
+  .status-copy{flex:1;min-width:0}
+  .status-title{font:27px/1 "Permanent Marker";text-transform:uppercase;color:var(--paper);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .status-sub{font-size:11px;color:#aaa6b2;margin-top:5px;line-height:1.35}
+  .attempt-box{background:#191920;border:2px solid #35353e;padding:7px 10px;min-width:78px;text-align:center;transform:rotate(2deg)}
+  .attempt-box small{font-size:8px;display:block;letter-spacing:1px}.attempt-box strong{font:24px "Permanent Marker";color:var(--orange)}
+  .meter{height:8px;background:#24242c;border:1px solid #3a3a44;margin:12px auto;max-width:700px;overflow:hidden}
+  .meter>i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--cyan),var(--acid),var(--hot));transition:width .12s}
+  .primary-controls{display:grid;grid-template-columns:1fr auto;gap:10px;max-width:700px;margin:0 auto}
+  .bigbtn{min-height:62px;background:var(--acid);color:#111;border:3px solid #111;box-shadow:6px 7px 0 #000;font:23px "Permanent Marker";text-transform:uppercase;cursor:pointer;transform:rotate(-.7deg)}
+  .bigbtn.armed{background:var(--hot);color:white;animation:pulse .7s infinite alternate}
+  @keyframes pulse{to{filter:brightness(1.25);transform:rotate(.6deg) scale(1.015)}}
+  .squarebtn{width:64px;background:var(--cyan);color:#101014;border:3px solid #111;box-shadow:5px 6px 0 #000;font:12px "Permanent Marker";cursor:pointer}
+  .secondary-controls{display:flex;gap:8px;max-width:700px;margin:12px auto 0;flex-wrap:wrap}
+  .chip{height:38px;font-size:10px;letter-spacing:.5px;flex:1;min-width:90px}
+  .chip.penalty{color:var(--orange)}
+  .chip.danger{color:var(--bad)}
+  .history{display:flex;gap:7px;overflow-x:auto;padding:13px 2px 5px;max-width:700px;margin:auto;scrollbar-width:none}
+  .history::-webkit-scrollbar{display:none}
+  .history-item{flex:0 0 auto;padding:7px 9px;background:#191920;border:1px solid #34343e;font-size:9px;max-width:145px;transform:rotate(-1deg)}
+  .history-item b{display:block;color:var(--acid);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .history-item.miss b{color:var(--bad)}
+  .sensor-bars{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-width:700px;margin:8px auto 0}
+  .sensor-bar{background:#17171e;border:1px solid #303039;padding:5px 6px;font-size:8px;color:#888}
+  .sensor-bar i{display:block;height:4px;margin-top:4px;width:50%;background:var(--cyan);transition:width .08s}
+
+  /* Nerd Out live diagnostics */
+  #nerdPanel{display:none}
+  #playScreen.nerd-mode .target-banner,#playScreen.nerd-mode .hud{display:none}
+  #playScreen.nerd-mode .panel{overflow:hidden;padding:6px 6px calc(var(--safe-bottom) + 8px)}
+  #playScreen.nerd-mode .panel>:not(#nerdPanel){display:none!important}
+  #playScreen.nerd-mode #nerdPanel{display:flex;height:100%;min-height:0;flex-direction:column;gap:5px}
+  #playScreen.nerd-mode .stage{flex-basis:clamp(235px,36dvh,350px)}
+  .nerd-toolbar{flex:none;display:flex;align-items:center;gap:5px;min-height:34px}
+  .nerd-title{font:17px/1 "Permanent Marker";color:var(--acid);letter-spacing:.5px;margin-right:auto;white-space:nowrap}
+  .nerd-status{font-size:7px;letter-spacing:.8px;color:#aaa;text-transform:uppercase;white-space:nowrap}
+  .nerd-mini{height:30px;min-width:58px;padding:0 7px;border:2px solid #3a3a44;background:#181820;color:white;border-radius:8px;font-size:8px;font-weight:900;box-shadow:0 3px 0 #000}
+  .nerd-mini.hot{background:var(--cyan);color:#09090c}
+  .nerd-grid{flex:1;min-height:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));gap:4px}
+  .nerd-card{min-width:0;min-height:0;overflow:hidden;background:#14141b;border:1px solid #383842;padding:4px 5px;box-shadow:2px 2px 0 #000}
+  .nerd-card:nth-child(3n+1){border-top:3px solid var(--cyan)}
+  .nerd-card:nth-child(3n+2){border-top:3px solid var(--hot)}
+  .nerd-card:nth-child(3n){border-top:3px solid var(--acid)}
+  .nerd-card h4{margin:0 0 2px;font-size:7px;line-height:1;letter-spacing:.8px;color:#aaa;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .nerd-row{display:flex;align-items:baseline;justify-content:space-between;gap:3px;min-height:16px;border-top:1px solid #24242c;font-size:7px;color:#85838f;white-space:nowrap}
+  .nerd-row:first-of-type{border-top:0}
+  .nerd-row b{min-width:0;overflow:hidden;text-overflow:ellipsis;color:#f4f1e8;font:9px/1.1 ui-monospace,SFMono-Regular,Consolas,monospace;text-align:right}
+  .nerd-row b.good{color:var(--good)}
+  .nerd-row b.warn{color:var(--warn)}
+  .nerd-row b.bad{color:var(--bad)}
+
+  /* overlays */
+  .overlay{position:fixed;inset:0;background:#07070bdc;backdrop-filter:blur(9px);z-index:100;display:none;align-items:center;justify-content:center;padding:18px}
+  .overlay.show{display:flex;animation:fade .2s}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .modal{width:min(100%,540px);max-height:88vh;overflow:auto;background:var(--paper);color:#111;border:4px solid #111;box-shadow:12px 14px 0 #000;padding:18px;position:relative;transform:rotate(-.5deg)}
+  .modal:before{content:"";position:absolute;inset:8px;border:2px dashed #111;pointer-events:none;opacity:.28}
+  .modal h2{font:34px/1 "Permanent Marker";margin:0 0 10px;text-transform:uppercase}.modal p{font-size:12px;line-height:1.45}.modal .bigbtn{width:100%;margin-top:10px}
+  .safety-list{margin:10px 0;padding-left:20px;font-size:12px;line-height:1.5;font-weight:700}
+  .close-x{position:absolute;right:8px;top:8px;width:38px;height:38px;background:#111;color:white;border-radius:50%;z-index:2}
+  .sim-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:12px}
+  .sim-grid button{min-height:52px;background:#15151b;color:white;border:2px solid #111;box-shadow:4px 4px 0 #666;font:16px "Permanent Marker";text-transform:uppercase}
+  .sim-grid button:nth-child(3n){background:var(--hot)}.sim-grid button:nth-child(3n+1){background:var(--cyan);color:#111}.sim-grid button:nth-child(3n+2){background:var(--acid);color:#111}
+  .result-slam{position:fixed;z-index:110;opacity:0;left:50%;top:45%;transform:translate(-50%,-50%) rotate(-5deg) scale(0);width:min(92vw,560px);text-align:center;pointer-events:none;transition:.18s cubic-bezier(.2,1.7,.35,1)}
+  .result-slam.show{opacity:1;transform:translate(-50%,-50%) rotate(-3deg) scale(1)}
+  .result-slam .word{font:clamp(46px,15vw,90px)/.8 "Permanent Marker";color:var(--acid);text-shadow:7px 7px 0 #000,-3px -3px 0 var(--hot);text-transform:uppercase}
+  .result-slam .detail{display:inline-block;background:white;color:#111;padding:6px 12px;font-weight:900;font-size:12px;box-shadow:5px 5px 0 #000;margin-top:10px}
+  .result-slam.miss .word{color:var(--bad)}
+  .toast{position:fixed;left:50%;bottom:calc(var(--safe-bottom) + 12px);z-index:130;transform:translate(-50%,30px);opacity:0;background:#111;border:2px solid #555;color:white;padding:9px 13px;font-size:11px;transition:.2s;max-width:90vw;text-align:center;pointer-events:none}
+  .toast.show{transform:translate(-50%,0);opacity:1}
+  .confetti{position:fixed;inset:0;pointer-events:none;z-index:105;overflow:hidden}
+  .confetti i{position:absolute;width:8px;height:14px;top:45%;left:50%;animation:burst 1s ease-out forwards;background:var(--c)}
+  @keyframes burst{to{transform:translate(var(--x),var(--y)) rotate(var(--rot));opacity:0}}
+  .name-fields{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:10px 0}.name-fields input{width:100%;padding:11px;border:3px solid #111;background:white;font-weight:900}
+  .tiny{font-size:9px;color:#666;line-height:1.4}
+  .credits a{color:#111;font-weight:900}
+  @media (max-width:560px){
+    header{height:64px;gap:4px;padding:8px 6px;flex-wrap:nowrap}
+    .logo{font-size:17px;letter-spacing:-.65px}
+    .logo small{font-size:5.5px;letter-spacing:1.15px;margin-top:3px}
+    .spacer{flex:1;min-width:0}
+    .model-toggle{flex:0 0 112px;padding:2px}
+    .model-toggle button{height:28px;flex:1;padding:0 2px;font-size:7.5px;letter-spacing:0}
+    #soundBtn{width:36px;min-width:36px;max-width:36px;font-size:7.5px}
+    #helpBtn{width:34px;min-width:34px;max-width:34px}
+    .stage{flex-basis:clamp(245px,42dvh,390px)}
+    .panel{padding-bottom:calc(var(--safe-bottom) + 116px)}
+    #playScreen.nerd-mode .stage{flex-basis:clamp(220px,34dvh,315px)}
+    .nerd-title{font-size:15px}
+    .nerd-status{display:none}
+  }
+  @media (max-width:360px){
+    header{gap:3px;padding-inline:5px}
+    .logo{font-size:15px;letter-spacing:-.8px}
+    .logo small{font-size:5px;letter-spacing:.9px}
+    .model-toggle{flex-basis:101px}
+    .model-toggle button{padding:0 1px;font-size:7px}
+    #soundBtn{width:33px;min-width:33px;max-width:33px}
+    #helpBtn{width:31px;min-width:31px;max-width:31px}
+    .nerd-card{padding-inline:3px}
+    .nerd-row{font-size:6.5px}.nerd-row b{font-size:8px}
+  }
+  @media (max-height:650px){
+    .stage{flex-basis:clamp(190px,39dvh,270px)}
+    .target-name{font-size:clamp(25px,8vw,40px)}
+    .panel{padding-bottom:calc(var(--safe-bottom) + 88px)}
+    #playScreen.nerd-mode .stage{flex-basis:190px}
+    .nerd-toolbar{min-height:28px}.nerd-title{font-size:13px}.nerd-mini{height:26px}
+    .nerd-row{min-height:14px}.nerd-row b{font-size:8px}
+  }
+  @media (min-width:720px){.modes{grid-template-columns:repeat(3,1fr)}.stage{flex-basis:clamp(300px,48dvh,500px)}}
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div class="app checker">
+  <header>
+    <div class="logo">AIR DECK '99<small>TOSS // TWIST // CATCH</small></div>
+    <div class="spacer"></div>
+    <div class="model-toggle" aria-label="Display model">
+      <button id="deckToggle" class="on">DECK</button><button id="phoneToggle">PHONE</button><button id="bothToggle">BOTH</button>
+    </div>
+    <button class="iconbtn" id="soundBtn" aria-label="Sound effects on" title="Sound effects">SFX</button>
+    <button class="iconbtn" id="helpBtn" aria-label="Help">?</button>
+  </header>
+  <main>
+    <section class="screen active" id="homeScreen">
+      <div class="hero">
+        <div class="scribble s2"></div><div class="scribble"></div>
+        <div class="hero-title">AIR<br><span>DECK</span> '99</div>
+      </div>
+      <div class="hero-sub">Your phone is the board. Your throw is the trick.</div>
+      <div class="warning-strip">THROW OVER A BED OR COUCH. USE A CASE. KEEP PEOPLE, PETS, WINDOWS, AND CEILING FANS OUT OF RANGE.</div>
+      <div class="modes" id="modeGrid"></div>
+      <div class="footer-note">Motion recognition works best in Chrome on Android. Some browsers require HTTPS for motion sensors; the built-in Trick Lab simulator works everywhere.</div>
+    </section>
+
+    <section class="screen" id="playScreen">
+      <div class="stage">
+        <canvas id="threeCanvas"></canvas>
+        <div class="stage-top">
+          <button class="iconbtn back" id="backBtn">BACK</button>
+          <div class="mode-label" id="modeLabel">FREE FLIP</div>
+          <div class="live-pill"><b id="sensorDot">● SENSOR</b><br><span id="sensorState">not enabled</span></div>
+        </div>
+        <div class="target-banner" id="targetBanner">
+          <div class="target-kicker" id="targetKicker">THROW ANYTHING</div>
+          <div class="target-name" id="targetName">SHOW US WHAT YOU GOT</div>
+        </div>
+        <div class="hud">
+          <div class="score-sticker"><small>SCORE</small><strong id="scoreText">0</strong></div>
+          <div class="player-chip" id="turnChip" style="display:none"><span>TURN</span><b>PLAYER 1</b></div>
+          <div class="letters" id="lettersHud" style="display:none"></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="status-row">
+          <div class="status-copy"><div class="status-title" id="statusTitle">READY TO SEND IT</div><div class="status-sub" id="statusSub">Tap ARM THROW, toss and rotate the phone, then catch it screen-up.</div></div>
+          <div class="attempt-box"><small id="attemptLabel">ATTEMPTS</small><strong id="attemptText">0</strong></div>
+        </div>
+        <div class="meter"><i id="motionMeter"></i></div>
+        <div class="primary-controls">
+          <button class="bigbtn" id="armBtn">ARM THROW</button>
+          <button class="squarebtn" id="demoBtn">DEMO</button>
+        </div>
+        <div class="secondary-controls">
+          <button class="chip" id="simBtn">TRICK LAB</button>
+          <button class="chip penalty" id="skipBtn">SKIP -250</button>
+          <button class="chip" id="calibrateBtn">CALIBRATE</button>
+          <button class="chip danger" id="endBtn">END RUN</button>
+        </div>
+        <div class="sensor-bars">
+          <div class="sensor-bar">ROLL <span id="rollVal">0</span><i id="rollBar"></i></div>
+          <div class="sensor-bar">FLIP <span id="flipVal">0</span><i id="flipBar"></i></div>
+          <div class="sensor-bar">SPIN <span id="spinVal">0</span><i id="spinBar"></i></div>
+        </div>
+        <div class="history" id="history"></div>
+        <div id="nerdPanel">
+          <div class="nerd-toolbar">
+            <div class="nerd-title">LIVE SENSOR BUS</div>
+            <div class="nerd-status" id="nerdStatus">WAITING FOR SENSOR DATA</div>
+            <button class="nerd-mini hot" id="nerdEnableBtn">ENABLE</button>
+            <button class="nerd-mini" id="nerdResetBtn">RESET</button>
+          </div>
+          <div class="nerd-grid">
+            <section class="nerd-card"><h4>Orientation deg</h4>
+              <div class="nerd-row"><span>Alpha</span><b id="nAlpha">0.0</b></div>
+              <div class="nerd-row"><span>Beta</span><b id="nBeta">0.0</b></div>
+              <div class="nerd-row"><span>Gamma</span><b id="nGamma">0.0</b></div>
+              <div class="nerd-row"><span>Screen</span><b id="nScreen">0</b></div>
+              <div class="nerd-row"><span>Absolute</span><b id="nAbsolute">NO</b></div>
+            </section>
+            <section class="nerd-card"><h4>Relative quaternion</h4>
+              <div class="nerd-row"><span>X</span><b id="nQx">0.000</b></div>
+              <div class="nerd-row"><span>Y</span><b id="nQy">0.000</b></div>
+              <div class="nerd-row"><span>Z</span><b id="nQz">0.000</b></div>
+              <div class="nerd-row"><span>W</span><b id="nQw">1.000</b></div>
+            </section>
+            <section class="nerd-card"><h4>Angular deg/s</h4>
+              <div class="nerd-row"><span>Flip X</span><b id="nRateX">0.0</b></div>
+              <div class="nerd-row"><span>Roll Y</span><b id="nRateY">0.0</b></div>
+              <div class="nerd-row"><span>Spin Z</span><b id="nRateZ">0.0</b></div>
+              <div class="nerd-row"><span>Total</span><b id="nRateMag">0.0</b></div>
+              <div class="nerd-row"><span>Source</span><b id="nRateSource">-</b></div>
+            </section>
+            <section class="nerd-card"><h4>Accel + gravity</h4>
+              <div class="nerd-row"><span>X</span><b id="nGravX">0.00</b></div>
+              <div class="nerd-row"><span>Y</span><b id="nGravY">0.00</b></div>
+              <div class="nerd-row"><span>Z</span><b id="nGravZ">0.00</b></div>
+              <div class="nerd-row"><span>Mag</span><b id="nGravMag">9.81</b></div>
+              <div class="nerd-row"><span>Available</span><b id="nAccelAvail">NO</b></div>
+            </section>
+            <section class="nerd-card"><h4>Linear accel</h4>
+              <div class="nerd-row"><span>X</span><b id="nLinX">0.00</b></div>
+              <div class="nerd-row"><span>Y</span><b id="nLinY">0.00</b></div>
+              <div class="nerd-row"><span>Z</span><b id="nLinZ">0.00</b></div>
+              <div class="nerd-row"><span>Mag</span><b id="nLinMag">0.00</b></div>
+              <div class="nerd-row"><span>Launch</span><b id="nLaunch">NO</b></div>
+            </section>
+            <section class="nerd-card"><h4>Detector</h4>
+              <div class="nerd-row"><span>Jerk</span><b id="nJerk">0.0</b></div>
+              <div class="nerd-row"><span>Peak G</span><b id="nPeak">9.81</b></div>
+              <div class="nerd-row"><span>Peak jerk</span><b id="nImpact">0.0</b></div>
+              <div class="nerd-row"><span>Signal</span><b id="nSignal">IDLE</b></div>
+            </section>
+            <section class="nerd-card"><h4>Event stream</h4>
+              <div class="nerd-row"><span>Motion Hz</span><b id="nMotionHz">0.0</b></div>
+              <div class="nerd-row"><span>Orient Hz</span><b id="nOrientHz">0.0</b></div>
+              <div class="nerd-row"><span>Motion #</span><b id="nMotionEvents">0</b></div>
+              <div class="nerd-row"><span>Orient #</span><b id="nOrientEvents">0</b></div>
+              <div class="nerd-row"><span>Age ms</span><b id="nAge">-</b></div>
+            </section>
+            <section class="nerd-card"><h4>Recognizer state</h4>
+              <div class="nerd-row"><span>State</span><b id="nCapture">IDLE</b></div>
+              <div class="nerd-row"><span>Started by</span><b id="nStarted">-</b></div>
+              <div class="nerd-row"><span>Gyro</span><b id="nGyroAvail">NO</b></div>
+              <div class="nerd-row"><span>Orientation</span><b id="nOrientAvail">NO</b></div>
+              <div class="nerd-row"><span>Samples</span><b id="nSamples">0</b></div>
+              <div class="nerd-row"><span>Elapsed ms</span><b id="nElapsed">0</b></div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="overlay show" id="safetyOverlay">
+  <div class="modal">
+    <h2>DON'T DECK YOUR PHONE</h2>
+    <p>This game reads motion sensors, but physics still wins. A bad catch can destroy a phone or hurt someone.</p>
+    <ul class="safety-list"><li>Practice over a bed, couch, or thick carpet.</li><li>Use a protective case and remove dangling cables.</li><li>Stay clear of faces, pets, lights, fans, and breakable objects.</li><li>Start with small hand flips before attempting real tosses.</li></ul>
+    <button class="bigbtn" id="safetyAccept">I GET IT — ENTER</button>
+  </div>
+</div>
+
+<div class="overlay" id="setupOverlay">
+  <div class="modal">
+    <button class="close-x" data-close="setupOverlay">X</button>
+    <h2 id="setupTitle">SET UP MATCH</h2>
+    <p id="setupText">Name the players. The phone will tell you whose turn it is.</p>
+    <div class="name-fields"><input id="p1Name" value="PLAYER 1" maxlength="14"><input id="p2Name" value="PLAYER 2" maxlength="14"></div>
+    <button class="bigbtn" id="setupStart">START BATTLE</button>
+  </div>
+</div>
+
+<div class="overlay" id="helpOverlay">
+  <div class="modal credits">
+    <button class="close-x" data-close="helpOverlay">X</button>
+    <h2>HOW IT READS A TRICK</h2>
+    <p><b>Roll</b> around the phone's long edge becomes kickflips or heelflips. <b>Flip</b> end-over-end becomes frontflips or backflips. <b>Spin</b> while screen-up becomes shove-its. Mixed axes become combo tricks.</p>
+    <p>Tap <b>ARM THROW</b>, hold steady for a moment, then toss. The app ignores handling movement and only counts an attempt after it sees a launch, real airtime, and a separate catch or settled landing.</p>
+    <p><b>Browser note:</b> if motion events are blocked from a local file, serve this same HTML over HTTPS or use Trick Lab to test every game mode.</p>
+    <p class="tiny">3D asset credits and alternative asset links are included in the chat message that came with this file. The game uses original UI, rules logic, and synthesized sound effects.</p>
+  </div>
+</div>
+
+<div class="overlay" id="simOverlay">
+  <div class="modal">
+    <button class="close-x" data-close="simOverlay">X</button>
+    <h2>TRICK LAB</h2>
+    <p>Simulate a sensor result to test the animation, scoring, and every multiplayer mode without risking the phone.</p>
+    <div class="sim-grid" id="simGrid"></div>
+  </div>
+</div>
+
+<div class="overlay" id="endOverlay">
+  <div class="modal">
+    <h2 id="endTitle">RUN COMPLETE</h2>
+    <p id="endSummary">Score 0</p>
+    <button class="bigbtn" id="replayBtn">RUN IT BACK</button>
+    <button class="bigbtn" id="homeBtn" style="background:var(--cyan)">BACK TO MODES</button>
+  </div>
+</div>
+
+<div class="result-slam" id="resultSlam"><div class="word" id="resultWord">KICKFLIP</div><div class="detail" id="resultDetail">CLEAN +500</div></div>
+<div class="confetti" id="confetti"></div>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => [...document.querySelectorAll(s)];
+const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
+const rad = d => d*Math.PI/180;
+const deg = r => r*180/Math.PI;
+const normName = s => (s || '').trim().toUpperCase() || 'PLAYER';
+const random = a => a[Math.floor(Math.random()*a.length)];
+const SKATE = ['S','K','A','T','E'];
+
+const MODES = [
+  {id:'free', n:'01', name:'Free Flip', tag:'Shreddr-style', desc:'Throw anything. The game identifies it, grades the catch, animates it, and stacks your score.'},
+  {id:'callout', n:'02', name:'Callout Run', tag:'Solo challenge', desc:'The deck calls a trick. Hit it exactly, build streaks, or pay points to skip.'},
+  {id:'duel', n:'03', name:'First To Land', tag:'2 players', desc:'Pass the phone. Both players chase the same callout. First to land it wins the round.'},
+  {id:'skate', n:'04', name:'S.K.A.T.E.', tag:'2 players', desc:'Set a trick, make your rival match it, and avoid spelling S.K.A.T.E.'},
+  {id:'ladder', n:'05', name:'Combo Ladder', tag:'3 lives', desc:'Climb from basic flips to nasty combinations. Miss three and the run is cooked.'},
+  {id:'blitz', n:'06', name:'60 Sec Riot', tag:'Time attack', desc:'Land as many different tricks as possible before the clock hits zero.'},
+  {id:'nerd', n:'07', name:'Nerd Out!', tag:'Live diagnostics', desc:'See the live 3D rotation plus every orientation, gyroscope, accelerometer, detector, and event-stream value the game uses.'}
+];
+
+const TRICKS = {
+  ollie:{name:'Ollie', roll:0, flip:0, spin:0, base:120, difficulty:1},
+  kickflip:{name:'Kickflip', roll:1, flip:0, spin:0, base:450, difficulty:1},
+  heelflip:{name:'Heelflip', roll:-1, flip:0, spin:0, base:475, difficulty:1},
+  frontflip:{name:'Frontflip', roll:0, flip:1, spin:0, base:520, difficulty:2},
+  backflip:{name:'Backflip', roll:0, flip:-1, spin:0, base:520, difficulty:2},
+  bs180:{name:'Backside 180 Shove-It', roll:0, flip:0, spin:1, base:360, difficulty:1},
+  fs180:{name:'Frontside 180 Shove-It', roll:0, flip:0, spin:-1, base:375, difficulty:1},
+  bs360:{name:'Backside 360 Shove-It', roll:0, flip:0, spin:2, base:620, difficulty:2},
+  fs360:{name:'Frontside 360 Shove-It', roll:0, flip:0, spin:-2, base:640, difficulty:2},
+  varial:{name:'Varial Kickflip', roll:1, flip:0, spin:1, base:760, difficulty:2},
+  hardflip:{name:'Hardflip', roll:1, flip:0, spin:-1, base:880, difficulty:3},
+  varialheel:{name:'Varial Heelflip', roll:-1, flip:0, spin:-1, base:820, difficulty:2},
+  inwardheel:{name:'Inward Heelflip', roll:-1, flip:0, spin:1, base:900, difficulty:3},
+  doublekick:{name:'Double Kickflip', roll:2, flip:0, spin:0, base:950, difficulty:3},
+  doubleheel:{name:'Double Heelflip', roll:-2, flip:0, spin:0, base:980, difficulty:3},
+  triplekick:{name:'Triple Kickflip', roll:3, flip:0, spin:0, base:1450, difficulty:4},
+  tre:{name:'360 Flip', roll:1, flip:0, spin:2, base:1250, difficulty:4},
+  laser:{name:'Laser Flip', roll:-1, flip:0, spin:-2, base:1300, difficulty:4},
+  nightmare:{name:'Nightmare Flip', roll:2, flip:0, spin:1, base:1500, difficulty:5}
+};
+const TRICK_KEYS = Object.keys(TRICKS);
+const CALLOUT_POOL = TRICK_KEYS.filter(k => k !== 'ollie');
+const LADDER = ['kickflip','bs180','heelflip','varial','doublekick','bs360','hardflip','tre','triplekick','nightmare'];
+
+const game = {
+  mode:'free', score:0, attempts:0, history:[], target:null, streak:0, player:0,
+  names:['PLAYER 1','PLAYER 2'], rounds:[0,0], skateLetters:[0,0], phase:'set', setter:0,
+  setTarget:null, finalTry:false, repeatSets:[new Set(),new Set()], ladderIndex:0, lives:3,
+  blitzEnd:0, blitzTimer:null, unique:new Set(), active:false
+};
+
+let soundOn = localStorage.getItem('airdeck_sound') !== 'off';
+let displayModel = localStorage.getItem('airdeck_model') || 'deck';
+if(!['deck','phone','both'].includes(displayModel))displayModel='deck';
+let currentDemo = null;
+let resultTimer = null;
+let toastTimer = null;
+let lastMode = 'free';
+const gameTimers = new Set();
+function gameLater(fn,ms){const id=setTimeout(()=>{gameTimers.delete(id);if(game.active)fn();},ms);gameTimers.add(id);return id;}
+function clearGameTimers(){for(const id of gameTimers)clearTimeout(id);gameTimers.clear();}
+
+function buildModes(){
+  $('#modeGrid').innerHTML = MODES.map(m => `<button class="mode-tape" data-mode="${m.id}"><span class="num">${m.n}</span><h3>${m.name}</h3><p>${m.desc}</p><span class="tag">${m.tag}</span></button>`).join('');
+  $$('.mode-tape').forEach(b => b.onclick = () => prepareMode(b.dataset.mode));
+}
+function buildSimulator(){
+  const keys = ['kickflip','heelflip','bs180','fs180','varial','hardflip','doublekick','tre','triplekick','nightmare'];
+  $('#simGrid').innerHTML = keys.map(k => `<button data-sim="${k}">${TRICKS[k].name}</button>`).join('') + '<button data-random="1">RANDOM CLEAN</button><button data-bail="1">SIMULATE BAIL</button>';
+  $$('#simGrid button').forEach(b => b.onclick = () => {
+    $('#simOverlay').classList.remove('show');
+    if(b.dataset.bail) simulateBail(); else simulateTrick(TRICKS[b.dataset.sim || random(keys)]);
+  });
+}
+
+function prepareMode(mode){
+  lastMode = mode;
+  if(mode === 'duel' || mode === 'skate'){
+    $('#setupTitle').textContent = mode === 'skate' ? 'SET UP S.K.A.T.E.' : 'SET UP FIRST TO LAND';
+    $('#setupText').textContent = mode === 'skate' ? 'Player 1 starts as the setter. A clean set must be matched by Player 2.' : 'Players alternate attempts at the same trick. First to three rounds wins.';
+    $('#setupOverlay').dataset.mode = mode;
+    $('#setupOverlay').classList.add('show');
+  } else startMode(mode);
+}
+
+function resetGame(mode){
+  clearGameTimers();clearInterval(game.blitzTimer);clearTimeout(resultTimer);$('#resultSlam').classList.remove('show');$('#confetti').innerHTML='';
+  Object.assign(game,{mode,score:0,attempts:0,history:[],target:null,streak:0,player:0,rounds:[0,0],skateLetters:[0,0],phase:'set',setter:0,setTarget:null,finalTry:false,repeatSets:[new Set(),new Set()],ladderIndex:0,lives:3,blitzEnd:0,blitzTimer:null,unique:new Set(),active:true});
+}
+
+function startMode(mode){
+  resetGame(mode);
+  currentDemo=null;
+  $('#homeScreen').classList.remove('active');
+  $('#playScreen').classList.add('active');
+  $('#playScreen').classList.toggle('nerd-mode',mode==='nerd');
+  $('#modeLabel').textContent = MODES.find(m=>m.id===mode)?.name || 'AIR DECK';
+  $('#lettersHud').style.display = mode === 'skate' ? 'flex' : 'none';
+  $('#turnChip').style.display = ['duel','skate'].includes(mode) ? 'block' : 'none';
+  $('#skipBtn').style.display = ['callout','ladder'].includes(mode) ? '' : 'none';
+  $('#attemptLabel').textContent = mode === 'ladder' ? 'LIVES' : mode === 'blitz' ? 'TIME' : 'ATTEMPTS';
+  if(mode === 'free') setFreePrompt();
+  if(mode === 'callout'){game.target = pickTarget(1); setTargetPrompt('CALL THIS',game.target);}
+  if(mode === 'duel'){game.target = pickTarget(1); setTargetPrompt('FIRST TO LAND',game.target); updateTurn();}
+  if(mode === 'skate'){setSkatePrompt(); updateTurn(); updateLetters();}
+  if(mode === 'ladder'){game.target = TRICKS[LADDER[0]]; setTargetPrompt('LADDER 1 / 10',game.target);}
+  if(mode === 'blitz'){setFreePrompt('60 SECOND RIOT'); game.blitzEnd = Date.now()+60000; game.blitzTimer=setInterval(updateBlitz,200);}
+  if(mode === 'nerd'){
+    clearOrientationReference();
+    $('#targetKicker').textContent='LIVE DIAGNOSTICS';$('#targetName').textContent='NERD OUT!';
+    enableSensors().then(ok=>{syncNerdButtons();if(ok)showToast('Sensor stream live. Rotate the phone to inspect every axis.');updateNerdDashboard(performance.now(),true);});
+  }
+  updateHUD();
+  if(mode!=='nerd')showToast('Tap ARM THROW or open TRICK LAB to test safely.');
+  resize3D();
+}
+
+function setFreePrompt(k='THROW ANYTHING'){
+  $('#targetKicker').textContent=k; $('#targetName').textContent='SHOW US WHAT YOU GOT'; $('#targetName').classList.remove('hot');
+  $('#statusTitle').textContent='READY TO SEND IT'; $('#statusSub').textContent='Arm the sensor, rotate the phone in the air, and catch it screen-up.';
+}
+function setTargetPrompt(k,t){
+  $('#targetKicker').textContent=k; $('#targetName').textContent=t.name; $('#targetName').classList.add('hot');
+  $('#statusTitle').textContent='MATCH THE ANIMATION'; $('#statusSub').textContent='Tap DEMO to replay the target, then arm your attempt.';
+  demoTrick(t,false);
+}
+function setSkatePrompt(){
+  if(game.phase==='set'){
+    $('#targetKicker').textContent='SET A NEW TRICK'; $('#targetName').textContent=game.names[game.setter]+' SETS';
+    $('#statusTitle').textContent='ANY CLEAN TRICK COUNTS'; $('#statusSub').textContent='A repeated set by the same player is not allowed.';
+  }else{
+    $('#targetKicker').textContent='MATCH THIS'; $('#targetName').textContent=game.setTarget.name;
+    $('#statusTitle').textContent=game.names[1-game.setter]+' ON DEFENSE'; $('#statusSub').textContent=game.finalTry ? 'Final letter: two tries are allowed.' : 'Miss it and take the next letter.';
+    demoTrick(game.setTarget,false);
+  }
+}
+function pickTarget(minDifficulty=1){
+  const maxD = Math.min(5,1+Math.floor((game.score+game.attempts*1000)/2500));
+  const pool = CALLOUT_POOL.map(k=>TRICKS[k]).filter(t=>t.difficulty>=minDifficulty && t.difficulty<=maxD);
+  let t = random(pool.length?pool:CALLOUT_POOL.map(k=>TRICKS[k]));
+  if(game.target && t.name===game.target.name) t = random(CALLOUT_POOL.map(k=>TRICKS[k]).filter(x=>x!==t));
+  return t;
+}
+
+function updateHUD(){
+  $('#scoreText').textContent = Math.max(0,Math.round(game.score)).toLocaleString();
+  $('#attemptText').textContent = game.mode==='ladder' ? game.lives : game.mode==='blitz' ? Math.max(0,Math.ceil((game.blitzEnd-Date.now())/1000)) : game.attempts;
+  $('#history').innerHTML = game.history.slice(-10).reverse().map(h=>`<div class="history-item ${h.ok?'':'miss'}"><b>${h.name}</b>${h.note}</div>`).join('');
+  if(['duel','skate'].includes(game.mode)) updateTurn();
+}
+function updateTurn(){
+  let who = game.mode==='skate' ? (game.phase==='set'?game.setter:1-game.setter) : game.player;
+  const lead=game.mode==='duel' ? `${game.rounds[0]} - ${game.rounds[1]}` : 'TURN';
+  $('#turnChip').innerHTML = `<span>${lead}</span><b>${game.names[who]}</b>`;
+}
+function updateLetters(){
+  $('#lettersHud').innerHTML = game.names.map((name,p)=>`<div class="skate-line"><small>${name}</small>${SKATE.map((l,i)=>`<span class="${i<game.skateLetters[p]?'got':''}" style="--r:${i%2?2:-2}deg">${l}</span>`).join('')}</div>`).join('');
+}
+function updateBlitz(){
+  if(!game.active || game.mode!=='blitz')return;
+  updateHUD();
+  if(Date.now()>=game.blitzEnd) endRun('TIME!','You landed '+game.unique.size+' unique tricks and scored '+game.score.toLocaleString()+'.');
+}
+
+/* Three.js scene */
+let renderer,scene,camera,root,deckObject,phoneObject,fallbackDeck,fallbackPhone,clock;
+let targetQuat = new THREE.Quaternion();
+let displayQuat = new THREE.Quaternion();
+let liveQuat = new THREE.Quaternion();
+let renderReady=false;
+const modelURLs = {
+  deck:'https://raw.githubusercontent.com/prismicio-community/suburbia/8d23aea6369e84c071905a41dcf5ca36b080dd71/public/skateboard.gltf',
+  phone:'https://raw.githubusercontent.com/trebeljahr/quaternius-showcase/d6aacfb25dd969ead90cddd94ad901e74aede5d8/public/glb/survival_pack/Phone.glb'
+};
+
+function init3D(){
+  const canvas=$('#threeCanvas');
+  renderer=new THREE.WebGLRenderer({canvas,alpha:true,antialias:true,powerPreference:'high-performance'});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2)); renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap; renderer.outputColorSpace=THREE.SRGBColorSpace;
+  scene=new THREE.Scene(); camera=new THREE.PerspectiveCamera(36,1,.1,100); camera.position.set(0,2.2,7.3); camera.lookAt(0,.2,0);
+  scene.add(new THREE.HemisphereLight(0x99ddff,0x16110d,2.4));
+  const key=new THREE.DirectionalLight(0xffffff,3.2);key.position.set(4,7,5);key.castShadow=true;scene.add(key);
+  const rim=new THREE.PointLight(0xff3ca6,35,12);rim.position.set(-4,2,-2);scene.add(rim);
+  const acid=new THREE.PointLight(0xd8ff37,24,10);acid.position.set(4,-1,1);scene.add(acid);
+  root=new THREE.Group();root.position.y=.15;scene.add(root);
+  fallbackDeck=makeDeck(); fallbackPhone=makePhone();
+  // Match the physical phone: the phone screen and the deck grip side face the camera,
+  // and the board's long axis is parallel to the phone instead of crossing it.
+  fallbackDeck.rotation.set(Math.PI/2,0,Math.PI/2);
+  root.add(fallbackDeck,fallbackPhone); rememberModelTransform(fallbackDeck); rememberModelTransform(fallbackPhone); fallbackPhone.visible=false;
+  loadModels();
+  clock=new THREE.Clock(); renderReady=true; resize3D(); animate3D();
+}
+function makeDeck(){
+  const g=new THREE.Group();
+  const shape=new THREE.Shape(); const L=4.2,W=1.25,R=.62;
+  shape.moveTo(-L/2+R,-W/2);shape.lineTo(L/2-R,-W/2);shape.quadraticCurveTo(L/2,-W/2,L/2,W/2-R);shape.quadraticCurveTo(L/2,W/2,L/2-R,W/2);shape.lineTo(-L/2+R,W/2);shape.quadraticCurveTo(-L/2,W/2,-L/2,W/2-R);shape.quadraticCurveTo(-L/2,-W/2,-L/2+R,-W/2);
+  const deckGeo=new THREE.ExtrudeGeometry(shape,{depth:.18,bevelEnabled:true,bevelSegments:3,steps:1,bevelSize:.08,bevelThickness:.07});deckGeo.center();
+  const deck=new THREE.Mesh(deckGeo,new THREE.MeshStandardMaterial({color:0xff3ca6,roughness:.42,metalness:.05})); deck.rotation.x=Math.PI/2; deck.castShadow=true; g.add(deck);
+  const grip=new THREE.Mesh(new THREE.BoxGeometry(3.8,.035,1.02),new THREE.MeshStandardMaterial({color:0x15151a,roughness:1}));grip.position.y=.17;grip.castShadow=true;g.add(grip);
+  const decal=new THREE.Mesh(new THREE.PlaneGeometry(2.2,.55),new THREE.MeshBasicMaterial({color:0xd8ff37,side:THREE.DoubleSide}));decal.rotation.x=-Math.PI/2;decal.position.set(0,-.12,0);g.add(decal);
+  [-1.28,1.28].forEach(x=>{
+    const truck=new THREE.Mesh(new THREE.BoxGeometry(.55,.16,.92),new THREE.MeshStandardMaterial({color:0xbcc4cc,metalness:.75,roughness:.25}));truck.position.set(x,-.23,0);truck.castShadow=true;g.add(truck);
+    [-.55,.55].forEach(z=>{const w=new THREE.Mesh(new THREE.CylinderGeometry(.22,.22,.18,18),new THREE.MeshStandardMaterial({color:0x31dcff,roughness:.5}));w.rotation.x=Math.PI/2;w.position.set(x,-.38,z);w.castShadow=true;g.add(w)});
+  });
+  g.scale.setScalar(.8); return g;
+}
+function makePhone(){
+  const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.BoxGeometry(2.05,3.95,.34,8,12,2),new THREE.MeshStandardMaterial({color:0x30313a,metalness:.65,roughness:.22}));body.castShadow=true;g.add(body);
+  const screen=new THREE.Mesh(new THREE.PlaneGeometry(1.82,3.5),new THREE.MeshPhysicalMaterial({color:0x0b1825,emissive:0x071426,emissiveIntensity:1.7,roughness:.08,metalness:.1}));screen.position.z=.176;g.add(screen);
+  const glow=new THREE.Mesh(new THREE.PlaneGeometry(1.58,2.7),new THREE.MeshBasicMaterial({color:0x31dcff,transparent:true,opacity:.24}));glow.position.z=.181;g.add(glow);
+  const cam=new THREE.Mesh(new THREE.CylinderGeometry(.15,.15,.05,20),new THREE.MeshStandardMaterial({color:0x09090c,metalness:.6}));cam.rotation.x=Math.PI/2;cam.position.set(-.66,1.55,-.19);g.add(cam);
+  g.scale.setScalar(.75);return g;
+}
+function loadModels(){
+  const loader=new GLTFLoader(); const draco=new DRACOLoader();draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/');loader.setDRACOLoader(draco);
+  loader.load(modelURLs.deck,gltf=>{deckObject=normalizeModel(gltf.scene,4.1);
+    // This asset is long on Z with its grip side on +Y. Rotate it so the grip side
+    // faces +Z (the viewer) and its length runs vertically beside the phone.
+    deckObject.rotation.set(Math.PI/2,0,0);rememberModelTransform(deckObject);root.add(deckObject);refreshModelLayout();},undefined,()=>showToast('Online deck asset unavailable — using the built-in 3D fallback.'));
+  loader.load(modelURLs.phone,gltf=>{phoneObject=normalizeModel(gltf.scene,4.0);rememberModelTransform(phoneObject);root.add(phoneObject);refreshModelLayout();},undefined,()=>showToast('Online phone asset unavailable — using the built-in 3D fallback.'));
+}
+function normalizeModel(obj,targetSize){
+  obj.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
+  const box=new THREE.Box3().setFromObject(obj), size=new THREE.Vector3(),center=new THREE.Vector3();box.getSize(size);box.getCenter(center);obj.position.sub(center);const m=Math.max(size.x,size.y,size.z)||1;obj.scale.multiplyScalar(targetSize/m);return obj;
+}
+function rememberModelTransform(obj){
+  if(!obj||obj.userData.airdeckBaseScale)return;
+  obj.userData.airdeckBaseScale=obj.scale.clone();
+  obj.userData.airdeckBasePosition=obj.position.clone();
+}
+function poseDisplayObject(obj,role,visible,both){
+  if(!obj)return;
+  rememberModelTransform(obj);
+  obj.visible=visible;
+  obj.scale.copy(obj.userData.airdeckBaseScale);
+  obj.position.copy(obj.userData.airdeckBasePosition);
+  if(both){
+    obj.scale.multiplyScalar(role==='deck'?.62:.61);
+    obj.position.x+=(role==='deck'?-1.18:1.32);
+    obj.position.y+=(role==='deck'?.05:0);
+  }
+}
+function refreshModelLayout(){
+  const both=displayModel==='both';
+  const showDeck=displayModel==='deck'||both;
+  const showPhone=displayModel==='phone'||both;
+  poseDisplayObject(deckObject,'deck',showDeck,both);
+  poseDisplayObject(fallbackDeck,'deck',showDeck&&!deckObject,both);
+  poseDisplayObject(phoneObject,'phone',showPhone,both);
+  poseDisplayObject(fallbackPhone,'phone',showPhone&&!phoneObject,both);
+}
+function setDisplayModel(type){
+  displayModel=['deck','phone','both'].includes(type)?type:'deck';localStorage.setItem('airdeck_model',displayModel);
+  $('#deckToggle').classList.toggle('on',displayModel==='deck');$('#phoneToggle').classList.toggle('on',displayModel==='phone');$('#bothToggle').classList.toggle('on',displayModel==='both');
+  refreshModelLayout();
+}
+function resize3D(){if(!renderer)return;const r=$('#threeCanvas').getBoundingClientRect();renderer.setSize(Math.max(1,r.width),Math.max(1,r.height),false);camera.aspect=r.width/Math.max(1,r.height);camera.updateProjectionMatrix();}
+function animate3D(){requestAnimationFrame(animate3D);if(!renderReady)return;const dt=Math.min(.04,clock.getDelta());
+  if(currentDemo){
+    const p=clamp((performance.now()-currentDemo.start)/currentDemo.duration,0,1);const e=p<.5?4*p*p*p:1-Math.pow(-2*p+2,3)/2;
+    if(currentDemo.kind==='path' && currentDemo.path.length){
+      const targetTime=p*currentDemo.path[currentDemo.path.length-1].t;let i=1;while(i<currentDemo.path.length&&currentDemo.path[i].t<targetTime)i++;
+      const a=currentDemo.path[Math.max(0,i-1)],b=currentDemo.path[Math.min(currentDemo.path.length-1,i)];const mix=b.t===a.t?0:clamp((targetTime-a.t)/(b.t-a.t),0,1);
+      const qa=new THREE.Quaternion(...a.q),qb=new THREE.Quaternion(...b.q);displayQuat.slerpQuaternions(qa,qb,mix);
+    }else if(currentDemo.kind==='trick'){
+      const t=currentDemo.trick;displayQuat.setFromEuler(new THREE.Euler(t.flip*Math.PI*2*e,t.spin*Math.PI*e,t.roll*Math.PI*2*e,'XYZ'));
+    }
+    root.position.y=.15+Math.sin(Math.PI*p)*1.15;
+    if(p>=1){const again=currentDemo.loop&&currentDemo.trick?currentDemo.trick:null;currentDemo=null;root.position.y=.15;if(again)setTimeout(()=>demoTrick(again,true),240);}
+  }else if(sensor.capturing || sensor.liveEnabled){displayQuat.slerp(liveQuat,.28);root.position.y=.15;}
+  else{const idle=new THREE.Quaternion().setFromEuler(new THREE.Euler(.12,performance.now()*.00018,-.08));displayQuat.slerp(idle,.035);}
+  root.quaternion.copy(displayQuat);renderer.render(scene,camera);
+}
+function demoTrick(t,loop=false){currentDemo={kind:'trick',start:performance.now(),duration:1550,trick:t,loop};}
+function replayPath(path,duration=1250){
+  if(!path||path.length<2)return false;currentDemo={kind:'path',start:performance.now(),duration:clamp(duration,650,2400),path,loop:false};return true;
+}
+
+/* Sensor system */
+const sensor={
+  permission:false,liveEnabled:false,armed:false,capturing:false,start:0,last:0,armTime:0,
+  rotation:new THREE.Vector3(),orientationRate:new THREE.Vector3(),accelVector:new THREE.Vector3(),linearVector:new THREE.Vector3(),accel:9.8,linearAccel:0,
+  orientationAlpha:0,orientationBeta:0,orientationGamma:0,orientationAbsolute:false,screenAngle:0,motionHz:0,orientationHz:0,lastMotionAt:0,
+  peak:0,impactPeak:0,jerk:0,prevAccel:9.8,quiet:0,freefallHold:0,motionHold:0,
+  throwPhase:'idle',armReady:false,launchHold:0,airborneHold:0,seenAirborne:false,airborneAt:0,falseStarts:0,lastDetectorAt:0,
+  startedBy:'',samples:[],q:new THREE.Quaternion(),orientationQ:new THREE.Quaternion(),
+  prevOrientationQ:new THREE.Quaternion(),captureOrientationBase:new THREE.Quaternion(),
+  orientationReferenceQ:new THREE.Quaternion(),relativeOrientationQ:new THREE.Quaternion(),orientationReferenceReady:false,
+  orientationSeen:false,orientationLast:0,orientationSpeed:0,eventCount:0,motionEventCount:0,orientationEventCount:0,
+  lastEventAt:0,lastSampleAt:0,lastNerdDraw:0,hasAcceleration:false,hasRotationRate:false
+};
+function requestMotionPermission(){
+  const reqs=[];
+  if(typeof DeviceMotionEvent!=='undefined' && typeof DeviceMotionEvent.requestPermission==='function')reqs.push(DeviceMotionEvent.requestPermission());
+  if(typeof DeviceOrientationEvent!=='undefined' && typeof DeviceOrientationEvent.requestPermission==='function')reqs.push(DeviceOrientationEvent.requestPermission());
+  return Promise.all(reqs).then(r=>r.every(x=>x==='granted')).catch(()=>false);
+}
+async function enableSensors(){
+  if(sensor.permission)return true;
+  const ok=await requestMotionPermission();
+  if(ok===false && (typeof window.DeviceMotionEvent?.requestPermission==='function')){showToast('Motion permission was denied. Trick Lab still works.');return false;}
+  window.addEventListener('devicemotion',onMotion,{passive:true});
+  window.addEventListener('deviceorientation',onOrientation,{passive:true});
+  sensor.permission=true;sensor.liveEnabled=true;
+  $('#sensorState').textContent='listening';$('#sensorDot').style.color='var(--warn)';
+  const count=sensor.eventCount;
+  setTimeout(()=>{
+    if(sensor.liveEnabled&&sensor.eventCount===count){
+      $('#sensorState').textContent='no motion data';$('#sensorDot').style.color='var(--bad)';
+      showToast('No motion data reached the page. Chrome over HTTPS works best; Trick Lab still works.');
+    }
+  },1200);
+  return true;
+}
+function readVector(obj){
+  if(!obj)return {ok:false,x:0,y:0,z:0,mag:0};
+  const ok=[obj.x,obj.y,obj.z].some(Number.isFinite);
+  const x=Number.isFinite(obj.x)?obj.x:0,y=Number.isFinite(obj.y)?obj.y:0,z=Number.isFinite(obj.z)?obj.z:0;
+  return {ok,x,y,z,mag:Math.hypot(x,y,z)};
+}
+function quaternionRate(prev,current,dt,out){
+  if(!dt||dt<=0){out.set(0,0,0);return out;}
+  const dq=prev.clone().invert().multiply(current).normalize();
+  if(dq.w<0)dq.set(-dq.x,-dq.y,-dq.z,-dq.w);
+  let angle=2*Math.acos(clamp(dq.w,-1,1));
+  if(angle>Math.PI)angle-=Math.PI*2;
+  const sinHalf=Math.sqrt(Math.max(0,1-dq.w*dq.w));
+  if(sinHalf<.0001){out.set(0,0,0);return out;}
+  out.set(dq.x/sinHalf,dq.y/sinHalf,dq.z/sinHalf).multiplyScalar(angle/dt);
+  return out;
+}
+function markSensorLive(){
+  if(sensor.eventCount===1){$('#sensorState').textContent='motion live';$('#sensorDot').style.color='var(--good)';}
+  syncNerdButtons();
+}
+function onOrientation(e){
+  if(e.alpha==null||e.beta==null||e.gamma==null)return;
+  const now=performance.now();sensor.eventCount++;sensor.orientationEventCount++;sensor.lastEventAt=now;markSensorLive();sensor.orientationSeen=true;
+  const priorOrientationAt=sensor.orientationLast;
+  sensor.orientationAlpha=e.alpha;sensor.orientationBeta=e.beta;sensor.orientationGamma=e.gamma;sensor.orientationAbsolute=!!e.absolute;sensor.screenAngle=screen.orientation?.angle||window.orientation||0;
+  const alpha=rad(e.alpha),beta=rad(e.beta),gamma=rad(e.gamma),orient=rad(sensor.screenAngle);
+  const eu=new THREE.Euler(beta,alpha,-gamma,'YXZ');const q=new THREE.Quaternion().setFromEuler(eu);
+  q.multiply(new THREE.Quaternion(-Math.sqrt(.5),0,0,Math.sqrt(.5)));
+  q.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,1),-orient));
+  if(priorOrientationAt){
+    const rawDt=Math.max(.001,(now-priorOrientationAt)/1000),dt=clamp(rawDt,.001,.12);
+    quaternionRate(sensor.prevOrientationQ,q,dt,sensor.orientationRate);
+    sensor.orientationSpeed=deg(sensor.orientationRate.length());sensor.orientationHz=1/rawDt;
+  }
+  sensor.orientationLast=now;sensor.prevOrientationQ.copy(q);sensor.orientationQ.copy(q);
+
+  // Treat the first valid orientation after a page/mode reset as straight ahead.
+  // This deliberately removes compass heading, so facing north or south starts identically.
+  if(!sensor.orientationReferenceReady){
+    sensor.orientationReferenceQ.copy(q).normalize();
+    sensor.orientationReferenceReady=true;
+    sensor.relativeOrientationQ.identity();
+    liveQuat.identity();displayQuat.identity();
+  }else{
+    sensor.relativeOrientationQ.copy(sensor.orientationReferenceQ).invert().multiply(q).normalize();
+    if(!sensor.capturing)liveQuat.copy(sensor.relativeOrientationQ);
+  }
+
+  if(sensor.armed&&!sensor.capturing)considerCapture(now,sensor.accel,sensor.orientationSpeed,sensor.linearAccel,sensor.jerk,'orientation');
+  if(sensor.capturing&&now-sensor.lastSampleAt>28){
+    recordCaptureSample(now,sensor.orientationRate,sensor.accel);
+    if(!sensor.hasAcceleration)updateCaptureState(now,sensor.orientationSpeed,clamp(sensor.orientationHz?1/sensor.orientationHz:.016,.005,.08),sensor.accel,sensor.linearAccel,sensor.jerk,false);
+  }
+  updateNerdDashboard(now);
+}
+function setArmedReady(now=sensor.armTime){
+  if(!sensor.armed||sensor.capturing||sensor.armTime!==now)return;
+  sensor.armReady=true;sensor.throwPhase='waiting';
+  $('#statusTitle').textContent='READY — TOSS NOW';
+  $('#statusSub').textContent='Waiting for a launch, real airtime, and then a separate catch.';
+  beep(330,.045,'square');navigator.vibrate?.(22);
+}
+function resetThrowDetector(){
+  sensor.freefallHold=0;sensor.motionHold=0;sensor.launchHold=0;sensor.airborneHold=0;sensor.quiet=0;sensor.lastDetectorAt=0;
+  sensor.seenAirborne=false;sensor.airborneAt=0;sensor.startedBy='';sensor.lastSampleAt=0;
+}
+function considerCapture(now,accel,speed,linearMag,jerk,source){
+  if(!sensor.armed||sensor.capturing||!sensor.armReady)return;
+  const dt=sensor.lastDetectorAt?clamp((now-sensor.lastDetectorAt)/1000,.005,.08):.016;sensor.lastDetectorAt=now;
+  const hasAccel=sensor.hasAcceleration;
+  const launchPulse=hasAccel&&(linearMag>4.8||jerk>34||accel>12.8);
+  const freefallStart=hasAccel&&accel<5.8;
+  const deliberateSpin=speed>155&&(linearMag>2.2||!hasAccel);
+  const orientationFallback=!hasAccel&&speed>195;
+  const launchCandidate=launchPulse||freefallStart||deliberateSpin||orientationFallback;
+  sensor.launchHold=launchCandidate?sensor.launchHold+dt:Math.max(0,sensor.launchHold-dt*2.2);
+  if(sensor.launchHold>.045){
+    beginCapture(freefallStart?'freefall':launchPulse?'launch':source==='orientation'?'orientation-fallback':'rotation-launch');
+  }
+}
+function updateCaptureState(now,speed,dt,accel,linearMag,jerk,hasAccel){
+  if(!sensor.capturing)return;
+  const elapsed=now-sensor.start;
+  const freefall=hasAccel&&accel<6.35;
+  const lowGravitySpin=hasAccel&&accel<8.4&&speed>125;
+  const noAccelFallback=!hasAccel&&speed>180;
+  const airborneCandidate=freefall||lowGravitySpin||noAccelFallback;
+  sensor.airborneHold=airborneCandidate?sensor.airborneHold+dt:Math.max(0,sensor.airborneHold-dt*1.8);
+
+  if(!sensor.seenAirborne&&sensor.airborneHold>.05){
+    sensor.seenAirborne=true;sensor.airborneAt=now;sensor.throwPhase='airborne';
+    $('#armBtn').textContent='CATCH / STOP';$('#statusTitle').textContent='AIRBORNE!';
+    $('#statusSub').textContent='Throw confirmed. Waiting for the catch or a fully settled landing.';
+    beep(430,.055,'sawtooth');
+  }
+
+  if(!sensor.seenAirborne){
+    if(elapsed>900)cancelCapture(true,'False start ignored. Still armed — toss when ready.');
+    return;
+  }
+
+  const sinceAir=now-sensor.airborneAt;
+  const impact=sinceAir>140&&hasAccel&&(accel>14.5||jerk>78);
+  const settled=speed<36&&(!hasAccel||(accel>7.2&&accel<12.9))&&linearMag<2.15;
+  sensor.quiet=settled?sensor.quiet+dt:Math.max(0,sensor.quiet-dt*.65);
+  if(impact||(sinceAir>260&&sensor.quiet>.22))finishCapture(false);
+  else if(elapsed>4600)cancelCapture(false,'No catch detected. Attempt was not counted.');
+}
+function recordCaptureSample(now,rate,accel){
+  if(!sensor.capturing)return;
+  const dt=sensor.lastSampleAt?clamp((now-sensor.lastSampleAt)/1000,.001,.08):.016;
+  sensor.lastSampleAt=now;
+  const dq=new THREE.Quaternion().setFromEuler(new THREE.Euler(rate.x*dt,rate.y*dt,rate.z*dt,'XYZ'));
+  sensor.q.multiply(dq).normalize();liveQuat.copy(sensor.q);
+  sensor.samples.push({t:now-sensor.start,q:[sensor.q.x,sensor.q.y,sensor.q.z,sensor.q.w],r:[rate.x,rate.y,rate.z],a:accel});
+}
+function onMotion(e){
+  const now=performance.now(),rawDt=sensor.last?Math.max(.001,(now-sensor.last)/1000):.016,dt=clamp(rawDt,.001,.08);sensor.last=now;sensor.motionHz=1/rawDt;sensor.lastMotionAt=now;
+  sensor.eventCount++;sensor.motionEventCount++;sensor.lastEventAt=now;markSensorLive();
+  const rr=e.rotationRate||{};
+  const rrOk=[rr.alpha,rr.beta,rr.gamma].some(Number.isFinite);
+  const rrRate=new THREE.Vector3(rad(Number.isFinite(rr.beta)?rr.beta:0),rad(Number.isFinite(rr.gamma)?rr.gamma:0),rad(Number.isFinite(rr.alpha)?rr.alpha:0));
+  sensor.hasRotationRate=rrOk;
+  const inc=readVector(e.accelerationIncludingGravity),lin=readVector(e.acceleration);
+  sensor.hasAcceleration=inc.ok;
+  sensor.accelVector.set(inc.x,inc.y,inc.z);sensor.linearVector.set(lin.x,lin.y,lin.z);
+  sensor.accel=inc.ok?inc.mag:(lin.ok?lin.mag:9.8);
+  sensor.linearAccel=lin.ok?lin.mag:Math.abs(sensor.accel-9.8);
+  sensor.jerk=Math.abs(sensor.accel-sensor.prevAccel)/Math.max(.001,dt);sensor.prevAccel=sensor.accel;
+  sensor.peak=Math.max(sensor.peak,sensor.accel);sensor.impactPeak=Math.max(sensor.impactPeak,sensor.jerk);
+  const rrSpeed=deg(rrRate.length()),speed=Math.max(rrSpeed,sensor.orientationSpeed||0);
+  sensor.rotation.copy(rrSpeed>4?rrRate:sensor.orientationRate);
+  updateTelemetry(sensor.rotation.x,sensor.rotation.y,sensor.rotation.z,speed,sensor.accel);
+  updateNerdDashboard(now);
+  if(sensor.armed&&!sensor.capturing)considerCapture(now,sensor.accel,speed,sensor.linearAccel,sensor.jerk,'motion');
+  if(sensor.capturing){
+    recordCaptureSample(now,sensor.rotation,sensor.accel);
+    updateCaptureState(now,speed,dt,sensor.accel,sensor.linearAccel,sensor.jerk,sensor.hasAcceleration);
+  }
+}
+function updateTelemetry(rx,ry,rz,speed,a){
+  const vals=[deg(ry),deg(rx),deg(rz)];['roll','flip','spin'].forEach((n,i)=>{$('#'+n+'Val').textContent=Math.round(vals[i]);$('#'+n+'Bar').style.width=clamp(Math.abs(vals[i])/7,3,100)+'%';});
+  $('#motionMeter').style.width=clamp((speed/700)*100,0,100)+'%';
+}
+function nerdValue(id,value,cls=''){
+  const el=$('#'+id);if(!el)return;el.textContent=value;el.className=cls;
+}
+function fmt(v,d=1){return Number.isFinite(v)?v.toFixed(d):'-';}
+function syncNerdButtons(){
+  const b=$('#nerdEnableBtn');if(!b)return;
+  b.textContent=sensor.liveEnabled?'LIVE':'ENABLE';b.classList.toggle('hot',!sensor.liveEnabled);
+  $('#nerdStatus').textContent=sensor.eventCount?'STREAMING '+sensor.eventCount.toLocaleString()+' EVENTS':sensor.permission?'LISTENING - MOVE PHONE':'TAP ENABLE FOR SENSOR ACCESS';
+}
+function updateNerdDashboard(now=performance.now(),force=false){
+  if(game.mode!=='nerd'||!game.active)return;
+  if(!force&&now-sensor.lastNerdDraw<45)return;sensor.lastNerdDraw=now;
+  const q=sensor.orientationReferenceReady?sensor.relativeOrientationQ:sensor.orientationQ,rv=(!sensor.motionEventCount||!sensor.hasRotationRate)?sensor.orientationRate:sensor.rotation,av=sensor.accelVector,lv=sensor.linearVector;
+  const speed=deg(rv.length()),rateSource=sensor.hasRotationRate?'GYROSCOPE':sensor.orientationSeen?'ORIENTATION':'NONE';
+  const freefall=sensor.hasAcceleration&&sensor.accel<8.35;
+  const rotating=speed>58;
+  const launched=sensor.linearAccel>2.4||sensor.jerk>16;
+  const impact=sensor.accel>14.2||sensor.jerk>62;
+  const signal=impact?'IMPACT':freefall?'FREEFALL':rotating?'ROTATING':launched?'LAUNCH':'IDLE';
+  const capture=sensor.capturing?(sensor.seenAirborne?'AIRBORNE':'LAUNCH CHECK'):sensor.armed?(sensor.armReady?'WAITING':'SETTLING'):sensor.liveEnabled?'LIVE':'OFF';
+  nerdValue('nAlpha',fmt(sensor.orientationAlpha));nerdValue('nBeta',fmt(sensor.orientationBeta));nerdValue('nGamma',fmt(sensor.orientationGamma));nerdValue('nScreen',fmt(sensor.screenAngle,0));nerdValue('nAbsolute',sensor.orientationAbsolute?'YES':'NO',sensor.orientationAbsolute?'good':'');
+  nerdValue('nQx',fmt(q.x,3));nerdValue('nQy',fmt(q.y,3));nerdValue('nQz',fmt(q.z,3));nerdValue('nQw',fmt(q.w,3));
+  nerdValue('nRateX',fmt(deg(rv.x)));nerdValue('nRateY',fmt(deg(rv.y)));nerdValue('nRateZ',fmt(deg(rv.z)));nerdValue('nRateMag',fmt(speed));nerdValue('nRateSource',rateSource);
+  nerdValue('nGravX',fmt(av.x,2));nerdValue('nGravY',fmt(av.y,2));nerdValue('nGravZ',fmt(av.z,2));nerdValue('nGravMag',fmt(sensor.accel,2),freefall?'warn':'');nerdValue('nAccelAvail',sensor.hasAcceleration?'YES':'NO',sensor.hasAcceleration?'good':'warn');
+  nerdValue('nLinX',fmt(lv.x,2));nerdValue('nLinY',fmt(lv.y,2));nerdValue('nLinZ',fmt(lv.z,2));nerdValue('nLinMag',fmt(sensor.linearAccel,2));nerdValue('nLaunch',launched?'YES':'NO',launched?'warn':'good');
+  nerdValue('nJerk',fmt(sensor.jerk));nerdValue('nPeak',fmt(sensor.peak,2));nerdValue('nImpact',fmt(sensor.impactPeak));nerdValue('nSignal',signal,impact?'bad':freefall||rotating||launched?'warn':'good');
+  nerdValue('nMotionHz',fmt(sensor.motionHz));nerdValue('nOrientHz',fmt(sensor.orientationHz));nerdValue('nMotionEvents',sensor.motionEventCount.toLocaleString());nerdValue('nOrientEvents',sensor.orientationEventCount.toLocaleString());nerdValue('nAge',sensor.lastEventAt?Math.round(now-sensor.lastEventAt):'-');
+  nerdValue('nCapture',capture,sensor.capturing?'bad':sensor.liveEnabled?'good':'warn');nerdValue('nStarted',sensor.startedBy||'-');nerdValue('nGyroAvail',sensor.hasRotationRate?'YES':'NO',sensor.hasRotationRate?'good':'warn');nerdValue('nOrientAvail',sensor.orientationSeen?'YES':'NO',sensor.orientationSeen?'good':'warn');nerdValue('nSamples',sensor.samples.length.toLocaleString());nerdValue('nElapsed',sensor.capturing?Math.round(now-sensor.start):0);
+  syncNerdButtons();
+}
+function clearOrientationReference(){
+  sensor.orientationReferenceReady=false;sensor.orientationReferenceQ.identity();sensor.relativeOrientationQ.identity();
+  liveQuat.identity();displayQuat.identity();sensor.orientationLast=0;sensor.orientationRate.set(0,0,0);sensor.orientationSpeed=0;
+}
+function resetOrientationReference(useCurrent=true){
+  if(useCurrent&&sensor.orientationSeen){
+    sensor.orientationReferenceQ.copy(sensor.orientationQ).normalize();sensor.orientationReferenceReady=true;
+    sensor.relativeOrientationQ.identity();liveQuat.identity();displayQuat.identity();
+    sensor.prevOrientationQ.copy(sensor.orientationQ);sensor.orientationLast=performance.now();
+  }else clearOrientationReference();
+}
+function resetNerdPeaks(){sensor.peak=sensor.accel;sensor.impactPeak=sensor.jerk;sensor.eventCount=0;sensor.motionEventCount=0;sensor.orientationEventCount=0;resetOrientationReference(true);updateNerdDashboard(performance.now(),true);showToast('Counters reset. Current phone direction is now straight ahead.');}
+async function armThrow(){
+  if(sensor.capturing){
+    if(sensor.seenAirborne)finishCapture(true);
+    else cancelCapture(false,'Launch check cancelled. No attempt was counted.');
+    return;
+  }
+  if(!await enableSensors())return;
+  sensor.armed=!sensor.armed;
+  if(sensor.armed){
+    sensor.armTime=performance.now();sensor.armReady=false;sensor.throwPhase='settling';resetThrowDetector();sensor.prevAccel=sensor.accel;
+    sensor.captureOrientationBase.copy(sensor.orientationQ);sensor.lastSampleAt=0;
+    const thisArm=sensor.armTime;setTimeout(()=>setArmedReady(thisArm),360);
+  }else{
+    sensor.throwPhase='idle';sensor.armReady=false;resetThrowDetector();
+  }
+  $('#armBtn').classList.toggle('armed',sensor.armed);$('#armBtn').textContent=sensor.armed?'HOLD STEADY':'ARM THROW';
+  $('#statusTitle').textContent=sensor.armed?'HOLD STEADY…':'READY TO SEND IT';
+  $('#statusSub').textContent=sensor.armed?'Tap movement is being ignored. The detector will be ready in a moment.':'Tap ARM THROW when you are ready.';
+  if(sensor.armed){
+    beep(210,.08,'square');navigator.vibrate?.([35,30,35]);
+    const count=sensor.eventCount;
+    setTimeout(()=>{
+      if(!sensor.armed||sensor.capturing)return;
+      if(sensor.eventCount===count)showToast('The browser is not sending motion data. Try Chrome over HTTPS.');
+      else showToast('Still armed. Only launch + airtime + catch will count.');
+    },2600);
+  }
+}
+function beginCapture(reason){
+  sensor.capturing=true;sensor.armed=false;sensor.armReady=false;sensor.start=performance.now();sensor.q.identity();sensor.samples=[];
+  sensor.peak=sensor.accel;sensor.impactPeak=sensor.jerk;sensor.quiet=0;sensor.airborneHold=0;sensor.seenAirborne=false;sensor.airborneAt=0;
+  sensor.throwPhase='launch-check';sensor.startedBy=reason;sensor.lastSampleAt=0;liveQuat.identity();
+  sensor.captureOrientationBase.copy(sensor.orientationQ);
+  $('#armBtn').classList.add('armed');$('#armBtn').textContent='CANCEL';$('#statusTitle').textContent='LAUNCH DETECTED';
+  $('#statusSub').textContent='Checking for real airtime. Handling movement will be ignored automatically.';
+}
+function cancelCapture(rearm,message){
+  sensor.capturing=false;sensor.samples=[];sensor.q.identity();resetThrowDetector();sensor.falseStarts++;
+  if(rearm){
+    sensor.armed=true;sensor.armReady=true;sensor.throwPhase='waiting';sensor.armTime=performance.now();
+    $('#armBtn').classList.add('armed');$('#armBtn').textContent='THROW NOW';$('#statusTitle').textContent='READY — TOSS NOW';
+    $('#statusSub').textContent='Waiting for a launch, real airtime, and then a separate catch.';
+  }else{
+    sensor.armed=false;sensor.armReady=false;sensor.throwPhase='idle';$('#armBtn').classList.remove('armed');$('#armBtn').textContent='ARM THROW';
+    $('#statusTitle').textContent='READY TO SEND IT';$('#statusSub').textContent='Tap ARM THROW when you are ready.';
+  }
+  if(message)showToast(message);
+}
+function finishCapture(manual){
+  if(!sensor.capturing)return;
+  if(!sensor.seenAirborne){cancelCapture(false,'No airtime detected. Attempt was not counted.');return;}
+  sensor.capturing=false;sensor.armed=false;sensor.armReady=false;sensor.throwPhase='idle';$('#armBtn').classList.remove('armed');$('#armBtn').textContent='ARM THROW';
+  const elapsed=performance.now()-sensor.start;const result=classifySamples(sensor.samples,sensor.q,elapsed,sensor.peak,manual);processResult(result);sensor.samples=[];
+}
+function calibrate(){
+  sensor.q.identity();resetOrientationReference(true);
+  showToast('Orientation reset. The current phone direction is now straight ahead.');navigator.vibrate?.(25);
+}
+
+function classifySamples(samples,q,airtime,peak,manual=false){
+  if(samples.length<2)return {ok:false,name:'No Motion',trick:null,note:'nothing recorded',score:0,q:new THREE.Quaternion(),airtime};
+  let x=0,y=0,z=0;for(let i=1;i<samples.length;i++){const dt=(samples[i].t-samples[i-1].t)/1000;x+=samples[i].r[0]*dt;y+=samples[i].r[1]*dt;z+=samples[i].r[2]*dt;}
+  const result=classifyAngles({flip:x,roll:y,spin:z},q,airtime,peak,manual);result.path=samples.map(s=>({t:s.t,q:s.q}));return result;
+}
+function classifyAngles(a,q,airtime=1200,peak=14,manual=false){
+  let roll=Math.round(a.roll/(Math.PI*2));let flip=Math.round(a.flip/(Math.PI*2));let spin=Math.round(a.spin/Math.PI);
+  if(Math.abs(a.roll)<Math.PI*.55)roll=0;if(Math.abs(a.flip)<Math.PI*.55)flip=0;if(Math.abs(a.spin)<Math.PI*.38)spin=0;
+  const total=Math.abs(a.roll)+Math.abs(a.flip)+Math.abs(a.spin);
+  if(!roll&&!flip&&!spin){
+    if(total<1.1)return {ok:false,name:'No Commit',trick:null,note:'not enough rotation',score:0,q:q.clone(),airtime};
+    return {ok:false,name:'Sketchy Half Flip',trick:null,note:'rotation did not complete',score:0,q:q.clone(),airtime};
+  }
+  const sig={roll:clamp(roll,-4,4),flip:clamp(flip,-3,3),spin:clamp(spin,-6,6)};
+  const trick=trickFromSignature(sig);
+  const errRoll=Math.abs(a.roll/(Math.PI*2)-sig.roll),errFlip=Math.abs(a.flip/(Math.PI*2)-sig.flip),errSpin=Math.abs(a.spin/Math.PI-sig.spin);
+  const error=(errRoll+errFlip+errSpin)/(Math.max(1,Math.abs(sig.roll)+Math.abs(sig.flip)+Math.abs(sig.spin)));
+  const clean=manual||error<.27;const stopped=manual||peak>10;const ok=clean&&stopped;
+  const quality=clamp(1-error,0,1);const score=Math.round((trick.base||450)*(ok?1:.28)*(1+Math.min(1.2,airtime/2600))*(.75+quality*.45));
+  return {ok,name:trick.name,trick,signature:sig,note:ok?(quality>.86?'bolts':'landed'):'under-rotated / sketchy',score,q:q.clone(),airtime,quality};
+}
+function trickFromSignature(s){
+  const exact=Object.values(TRICKS).find(t=>t.roll===s.roll&&t.flip===s.flip&&t.spin===s.spin);if(exact)return exact;
+  const parts=[];
+  if(s.roll){const n=Math.abs(s.roll);parts.push((n===1?'':n===2?'Double ':n===3?'Triple ':n+'x ')+(s.roll>0?'Kickflip':'Heelflip'));}
+  if(s.flip){const n=Math.abs(s.flip);parts.push((n>1?n+'x ':'')+(s.flip>0?'Frontflip':'Backflip'));}
+  if(s.spin){parts.push((s.spin>0?'Backside ':'Frontside ')+(Math.abs(s.spin)*180)+' Shove-It');}
+  return {name:parts.join(' + '),...s,base:350+Math.abs(s.roll)*420+Math.abs(s.flip)*480+Math.abs(s.spin)*180,difficulty:5};
+}
+function signatureKey(t){return `${t.roll}|${t.flip}|${t.spin}`;}
+function matches(a,b){return !!a&&!!b&&a.roll===b.roll&&a.flip===b.flip&&a.spin===b.spin;}
+
+function processResult(r){
+  game.attempts++;if(!replayPath(r.path,r.airtime||1250) && r.trick)demoTrick(r.trick,false);
+  if(!r.trick){showResult(r.name,r.note,false);addHistory(r.name,r.note,false);game.streak=0;modeAfterResult(r,false);return;}
+  let modeSuccess=r.ok;
+  if(['callout','duel','ladder'].includes(game.mode))modeSuccess=r.ok&&matches(r.trick,game.target);
+  if(game.mode==='skate'&&game.phase==='match')modeSuccess=r.ok&&matches(r.trick,game.setTarget);
+  const note=modeSuccess?('+'+r.score+' // '+r.note):(r.ok?'wrong trick':'bail');
+  if(game.mode==='free'||game.mode==='blitz'||(game.mode==='skate'&&game.phase==='set')){
+    if(r.ok){game.score+=r.score;game.streak++;if(game.mode==='blitz')game.unique.add(signatureKey(r.trick));}
+    else game.streak=0;
+  }
+  showResult(r.name,note,modeSuccess);addHistory(r.name,note,modeSuccess);modeAfterResult(r,modeSuccess);updateHUD();
+}
+function modeAfterResult(r,success){
+  if(game.mode==='free')return;
+  if(game.mode==='blitz')return;
+  if(game.mode==='callout'){
+    if(success){const bonus=r.score+game.streak*100;game.score+=bonus;game.streak++;gameLater(()=>{game.target=pickTarget();setTargetPrompt('NEXT CALL',game.target);updateHUD();},900);}else{game.streak=0;$('#statusTitle').textContent=r.ok?'WRONG TRICK':'NO LAND';$('#statusSub').textContent='Target was '+game.target.name+'. Tap DEMO and try again.';}
+  }
+  if(game.mode==='duel'){
+    if(success){game.rounds[game.player]++;game.score+=r.score;const winner=game.rounds[game.player]>=3;if(winner){gameLater(()=>endRun('BATTLE WON',game.names[game.player]+' wins '+game.rounds[0]+'–'+game.rounds[1]+'.'),900);return;}gameLater(()=>{game.target=pickTarget();game.player=1-game.player;setTargetPrompt('ROUND '+(game.rounds[0]+game.rounds[1]+1),game.target);updateTurn();updateHUD();},950);}else{game.player=1-game.player;$('#statusTitle').textContent='PASS THE PHONE';$('#statusSub').textContent=game.names[game.player]+' gets the next attempt at '+game.target.name+'.';updateTurn();}
+  }
+  if(game.mode==='ladder'){
+    if(success){game.score+=r.score;game.ladderIndex++;if(game.ladderIndex>=LADDER.length){gameLater(()=>endRun('LADDER CLEARED','You survived all 10 tricks with '+game.lives+' lives left.'),900);return;}gameLater(()=>{game.target=TRICKS[LADDER[game.ladderIndex]];setTargetPrompt('LADDER '+(game.ladderIndex+1)+' / '+LADDER.length,game.target);updateHUD();},900);}else{game.lives--;if(game.lives<=0){gameLater(()=>endRun('RUN COOKED','You reached rung '+(game.ladderIndex+1)+' and scored '+game.score+'.'),900);return;}$('#statusTitle').textContent='LIFE LOST';$('#statusSub').textContent=game.lives+' lives left. Target remains '+game.target.name+'.';}
+  }
+  if(game.mode==='skate')handleSkate(r,success);
+}
+function handleSkate(r,success){
+  if(game.phase==='set'){
+    if(!r.ok||!r.trick){game.setter=1-game.setter;$('#statusTitle').textContent='SETTER BAILED';$('#statusSub').textContent=game.names[game.setter]+' now gets to set.';gameLater(()=>{setSkatePrompt();updateTurn();updateLetters();},800);return;}
+    const key=signatureKey(r.trick);if(game.repeatSets[game.setter].has(key)){game.setter=1-game.setter;showToast('Repeated set: turn passes.');gameLater(()=>{setSkatePrompt();updateTurn();updateLetters();},650);return;}
+    game.repeatSets[game.setter].add(key);game.setTarget=r.trick;game.phase='match';game.finalTry=false;gameLater(()=>{setSkatePrompt();updateTurn();updateLetters();},850);
+  } else {
+    const defender=1-game.setter;
+    if(success){game.phase='set';game.setTarget=null;game.finalTry=false;$('#statusTitle').textContent='MATCHED!';$('#statusSub').textContent=game.names[game.setter]+' keeps the set.';gameLater(()=>{setSkatePrompt();updateTurn();updateLetters();},850);}
+    else{
+      const wouldLose=game.skateLetters[defender]===4;
+      if(wouldLose&&!game.finalTry){game.finalTry=true;$('#statusTitle').textContent='LAST LETTER REBATE';$('#statusSub').textContent=game.names[defender]+' gets one final attempt.';showToast('Final letter gets two tries.');return;}
+      game.skateLetters[defender]++;game.phase='set';game.finalTry=false;updateLetters();
+      if(game.skateLetters[defender]>=5){gameLater(()=>endRun('S.K.A.T.E.!',game.names[game.setter]+' wins. '+game.names[defender]+' spelled S.K.A.T.E.'),850);return;}
+      gameLater(()=>{setSkatePrompt();updateTurn();updateLetters();updateHUD();},850);
+    }
+  }
+}
+
+function addHistory(name,note,ok){game.history.push({name,note,ok});if(game.history.length>30)game.history.shift();updateHUD();}
+function showResult(word,detail,ok){
+  clearTimeout(resultTimer);$('#resultWord').textContent=word;$('#resultDetail').textContent=detail;$('#resultSlam').classList.toggle('miss',!ok);$('#resultSlam').classList.add('show');
+  if(ok){beep(620,.08,'square');setTimeout(()=>beep(840,.11,'sawtooth'),70);navigator.vibrate?.([45,25,70]);burst();}else{beep(110,.16,'sawtooth');navigator.vibrate?.(90);}
+  resultTimer=setTimeout(()=>$('#resultSlam').classList.remove('show'),1100);
+}
+function burst(){const c=$('#confetti');c.innerHTML='';for(let i=0;i<36;i++){const el=document.createElement('i');el.style.setProperty('--x',(Math.random()*520-260)+'px');el.style.setProperty('--y',(Math.random()*-390+80)+'px');el.style.setProperty('--rot',(Math.random()*900-450)+'deg');el.style.setProperty('--c',random(['var(--acid)','var(--hot)','var(--cyan)','var(--orange)','white']));c.appendChild(el);}setTimeout(()=>c.innerHTML='',1050);}
+function showToast(msg){clearTimeout(toastTimer);$('#toast').textContent=msg;$('#toast').classList.add('show');toastTimer=setTimeout(()=>$('#toast').classList.remove('show'),2300);}
+
+function simulateTrick(t){
+  const jitter=()=> (Math.random()-.5)*.12;
+  const a={roll:t.roll*Math.PI*2+jitter(),flip:t.flip*Math.PI*2+jitter(),spin:t.spin*Math.PI+jitter()};const q=new THREE.Quaternion().setFromEuler(new THREE.Euler(a.flip,a.roll,a.spin,'XYZ'));
+  $('#statusTitle').textContent='SIMULATED THROW';$('#statusSub').textContent='This follows the same scoring and mode logic as a sensor result.';
+  gameLater(()=>processResult(classifyAngles(a,q,1200+Math.random()*800,15,true)),280);
+}
+function simulateBail(){const q=new THREE.Quaternion().setFromEuler(new THREE.Euler(1.1,.7,.3));gameLater(()=>processResult({ok:false,name:'Phone Taco',trick:null,note:'bad catch',score:0,q,airtime:700}),220);}
+
+function skipTarget(){
+  if(!['callout','ladder'].includes(game.mode))return;game.score=Math.max(0,game.score-250);game.streak=0;
+  if(game.mode==='callout'){game.target=pickTarget();setTargetPrompt('SKIPPED // -250',game.target);}else{game.lives--;if(game.lives<=0){endRun('RUN COOKED','You ran out of lives after a skip.');return;}game.ladderIndex++;if(game.ladderIndex>=LADDER.length){endRun('LADDER CLEARED','Technically. With a skip.');return;}game.target=TRICKS[LADDER[game.ladderIndex]];setTargetPrompt('SKIP // '+game.lives+' LIVES',game.target);}
+  updateHUD();beep(140,.09,'square');
+}
+function endRun(title='RUN COMPLETE',summary='Score '+game.score.toLocaleString()){
+  if(!game.active)return;game.active=false;clearGameTimers();clearInterval(game.blitzTimer);sensor.armed=false;sensor.capturing=false;$('#armBtn').classList.remove('armed');$('#armBtn').textContent='ARM THROW';
+  $('#endTitle').textContent=title;$('#endSummary').textContent=summary+' Final score: '+game.score.toLocaleString()+'. Attempts: '+game.attempts+'.';$('#endOverlay').classList.add('show');
+  const key='airdeck_best_'+game.mode;const best=Number(localStorage.getItem(key)||0);if(game.score>best)localStorage.setItem(key,game.score);
+}
+function goHome(){clearGameTimers();clearInterval(game.blitzTimer);clearTimeout(resultTimer);$('#resultSlam').classList.remove('show');$('#confetti').innerHTML='';game.active=false;$('#endOverlay').classList.remove('show');$('#playScreen').classList.remove('active','nerd-mode');$('#homeScreen').classList.add('active');}
+
+/* Sound */
+let audioCtx;
+function beep(freq=.02,dur=.08,type='square'){
+  if(!soundOn)return;audioCtx ||= new (window.AudioContext||window.webkitAudioContext)();const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type=type;o.frequency.value=freq;g.gain.setValueAtTime(.045,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+dur);o.connect(g).connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+dur);
+}
+
+/* UI events */
+buildModes();buildSimulator();init3D();setDisplayModel(displayModel);
+$('#safetyAccept').onclick=()=>{$('#safetyOverlay').classList.remove('show');beep(260,.05,'square');};
+$('#deckToggle').onclick=()=>setDisplayModel('deck');$('#phoneToggle').onclick=()=>setDisplayModel('phone');$('#bothToggle').onclick=()=>setDisplayModel('both');
+function syncSoundButton(){const b=$('#soundBtn');b.textContent=soundOn?'SFX':'MUTE';b.setAttribute('aria-label',soundOn?'Sound effects on':'Sound effects muted');}
+$('#soundBtn').onclick=()=>{soundOn=!soundOn;localStorage.setItem('airdeck_sound',soundOn?'on':'off');syncSoundButton();if(soundOn)beep(380,.05);};syncSoundButton();
+$('#helpBtn').onclick=()=>$('#helpOverlay').classList.add('show');
+$$('[data-close]').forEach(b=>b.onclick=()=>$('#'+b.dataset.close).classList.remove('show'));
+$('#setupStart').onclick=()=>{game.names=[normName($('#p1Name').value),normName($('#p2Name').value)];const m=$('#setupOverlay').dataset.mode;$('#setupOverlay').classList.remove('show');startMode(m);};
+$('#backBtn').onclick=()=>game.mode==='nerd'?goHome():endRun('QUIT THIS RUN?','Your current run is over.');
+$('#armBtn').onclick=armThrow;$('#demoBtn').onclick=()=>{const t=game.mode==='skate'&&game.phase==='match'?game.setTarget:game.target;if(t)demoTrick(t,false);else demoTrick(TRICKS.kickflip,false);};
+$('#simBtn').onclick=()=>$('#simOverlay').classList.add('show');$('#skipBtn').onclick=skipTarget;$('#calibrateBtn').onclick=calibrate;$('#endBtn').onclick=()=>endRun();
+$('#nerdEnableBtn').onclick=async()=>{await enableSensors();syncNerdButtons();updateNerdDashboard(performance.now(),true);};$('#nerdResetBtn').onclick=resetNerdPeaks;
+$('#homeBtn').onclick=goHome;$('#replayBtn').onclick=()=>{$('#endOverlay').classList.remove('show');if(['duel','skate'].includes(lastMode))prepareMode(lastMode);else startMode(lastMode);};
+window.addEventListener('resize',resize3D,{passive:true});screen.orientation?.addEventListener?.('change',()=>{resize3D();sensor.screenAngle=screen.orientation?.angle||window.orientation||0;clearOrientationReference();updateNerdDashboard(performance.now(),true);});
+setInterval(()=>updateNerdDashboard(performance.now(),true),250);
+let hiddenAt=0;
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){hiddenAt=performance.now();if(sensor.capturing)finishCapture(true);}
+  else if(hiddenAt){clearOrientationReference();hiddenAt=0;}
+});
+window.addEventListener('pageshow',()=>clearOrientationReference(),{once:true});
+</script>
+</body>
+</html>
