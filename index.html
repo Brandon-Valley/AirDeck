@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
 <meta name="theme-color" content="#0a0a0d" />
-<meta name="airdeck-build" content="2026-07-04-stable-heading-lock" />
+<meta name="airdeck-build" content="2026-07-04-tilt-stable-heading" />
 <title>AIR DECK '99</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Space+Grotesk:wght@500;700&display=swap');
@@ -370,7 +370,7 @@
     <h2>HOW IT READS A TRICK</h2>
     <p><b>Roll</b> around the phone's long edge becomes kickflips or heelflips. <b>Flip</b> end-over-end becomes frontflips or backflips. <b>Spin</b> while screen-up becomes shove-its. Mixed axes become combo tricks.</p>
     <p>Tap <b>ARM THROW</b>, hold steady for a moment, then toss. The app ignores handling movement and only counts an attempt after it sees a launch, real airtime, and a separate catch or settled landing.</p>
-    <p><b>Heading behavior:</b> while the phone is in your hand, only compass heading follows you so the screen side stays pointed toward you. Pitch and roll remain real. A detected throw freezes heading until the catch.</p>
+    <p><b>Heading behavior:</b> while the phone is in your hand, heading follows you using a tilt-safe blend of the screen face and phone edge. Pitch and roll remain real. A detected throw freezes heading until the catch.</p>
     <p><b>Browser note:</b> if motion events are blocked from a local file, serve this same HTML over HTTPS or use Trick Lab to test every game mode.</p>
     <p class="tiny">3D asset credits and alternative asset links are included in the chat message that came with this file. The game uses original UI, rules logic, and synthesized sound effects.</p>
   </div>
@@ -693,7 +693,7 @@ const sensor={
   startedBy:'',samples:[],q:new THREE.Quaternion(),orientationQ:new THREE.Quaternion(),
   prevOrientationQ:new THREE.Quaternion(),captureOrientationBase:new THREE.Quaternion(),
   orientationReferenceQ:new THREE.Quaternion(),relativeOrientationQ:new THREE.Quaternion(),orientationReferenceReady:false,
-  headingYaw:0,rawHeading:0,headingLocked:false,
+  headingYaw:0,rawHeading:0,headingConfidence:0,headingLocked:false,
   orientationSeen:false,orientationLast:0,orientationSpeed:0,eventCount:0,motionEventCount:0,orientationEventCount:0,
   lastEventAt:0,lastSampleAt:0,lastNerdDraw:0,hasAcceleration:false,hasRotationRate:false
 };
@@ -738,18 +738,60 @@ function quaternionRate(prev,current,dt,out){
   return out;
 }
 const headingAxis=new THREE.Vector3(0,1,0);
+const headingFaceProbe=new THREE.Vector3();
+const headingTopProbe=new THREE.Vector3();
 function unwrapHeading(next,previous){
   if(!Number.isFinite(previous))return next;
   while(next-previous>Math.PI)next-=Math.PI*2;
   while(next-previous<-Math.PI)next+=Math.PI*2;
   return next;
 }
-function updateHeadingCompensation(q,rawHeading=sensor.rawHeading,force=false){
-  // DeviceOrientation alpha is the world-vertical heading component used to build q.
-  // Removing alpha directly preserves the phone's real pitch and roll, even when flat.
+function smoothstep01(v){v=clamp(v,0,1);return v*v*(3-2*v);}
+function measuredScreenHeading(q,previous=0){
+  // Use the screen normal while upright and the phone's top edge while flat.
+  // DeviceOrientation alpha becomes unstable near upright, while the screen normal
+  // becomes unstable near flat. Blending these geometric directions avoids both snaps.
+  headingFaceProbe.set(0,0,1).applyQuaternion(q);
+  headingTopProbe.set(0,1,0).applyQuaternion(q);
+  const faceStrength=Math.hypot(headingFaceProbe.x,headingFaceProbe.z);
+  const edgeStrength=Math.hypot(headingTopProbe.x,headingTopProbe.z);
+  let faceAngle=null,edgeAngle=null;
+  if(faceStrength>.001)faceAngle=unwrapHeading(Math.atan2(headingFaceProbe.x,headingFaceProbe.z),previous);
+  if(edgeStrength>.001){
+    const raw=Math.atan2(headingTopProbe.x,headingTopProbe.z);
+    const reference=faceAngle!==null&&faceStrength>.12?faceAngle:previous;
+    const a=unwrapHeading(raw,reference),b=unwrapHeading(raw+Math.PI,reference);
+    edgeAngle=Math.abs(a-reference)<=Math.abs(b-reference)?a:b;
+    edgeAngle=unwrapHeading(edgeAngle,previous);
+  }
+  if(faceAngle===null&&edgeAngle===null)return {angle:previous,confidence:0};
+  if(faceAngle===null)return {angle:edgeAngle,confidence:edgeStrength};
+  if(edgeAngle===null)return {angle:faceAngle,confidence:faceStrength};
+  const edgeNearFace=unwrapHeading(edgeAngle,faceAngle);
+  const separation=Math.abs(edgeNearFace-faceAngle);
+  if(separation>Math.PI*.6){
+    const chosen=faceStrength>.22?faceAngle:edgeAngle;
+    return {angle:unwrapHeading(chosen,previous),confidence:Math.max(faceStrength,edgeStrength)};
+  }
+  const faceWeight=smoothstep01((faceStrength-.12)/.63);
+  const edgeWeight=1-faceWeight;
+  const x=Math.sin(faceAngle)*faceWeight+Math.sin(edgeNearFace)*edgeWeight;
+  const z=Math.cos(faceAngle)*faceWeight+Math.cos(edgeNearFace)*edgeWeight;
+  return {angle:unwrapHeading(Math.atan2(x,z),previous),confidence:Math.max(faceStrength,edgeStrength)};
+}
+function updateHeadingCompensation(q,force=false){
   if(force||!sensor.orientationReferenceReady||!sensor.headingLocked){
-    sensor.rawHeading=rawHeading;
-    sensor.headingYaw=unwrapHeading(rawHeading,sensor.headingYaw);
+    const measured=measuredScreenHeading(q,sensor.headingYaw);
+    let next=measured.angle;
+    if(!force&&sensor.orientationReferenceReady){
+      let delta=unwrapHeading(next,sensor.headingYaw)-sensor.headingYaw;
+      if(Math.abs(delta)>rad(55))delta=0;
+      delta=clamp(delta,-rad(16),rad(16));
+      next=sensor.headingYaw+delta*.88;
+    }
+    sensor.rawHeading=measured.angle;
+    sensor.headingConfidence=measured.confidence;
+    sensor.headingYaw=next;
     sensor.orientationReferenceQ.setFromAxisAngle(headingAxis,sensor.headingYaw);
     sensor.orientationReferenceReady=true;
   }
@@ -757,14 +799,14 @@ function updateHeadingCompensation(q,rawHeading=sensor.rawHeading,force=false){
   return sensor.relativeOrientationQ;
 }
 function lockHeadingForThrow(){
-  if(!sensor.orientationReferenceReady)updateHeadingCompensation(sensor.orientationQ,sensor.rawHeading,true);
+  if(!sensor.orientationReferenceReady)updateHeadingCompensation(sensor.orientationQ,true);
   sensor.headingLocked=true;
-  updateHeadingCompensation(sensor.orientationQ,sensor.rawHeading,false);
+  updateHeadingCompensation(sensor.orientationQ,false);
 }
 function unlockHeadingAfterThrow(){
   sensor.headingLocked=false;
   if(sensor.orientationSeen){
-    updateHeadingCompensation(sensor.orientationQ,sensor.rawHeading,true);
+    updateHeadingCompensation(sensor.orientationQ,true);
     liveQuat.copy(sensor.relativeOrientationQ);
   }
 }
@@ -777,7 +819,7 @@ function onOrientation(e){
   const now=performance.now();sensor.eventCount++;sensor.orientationEventCount++;sensor.lastEventAt=now;markSensorLive();sensor.orientationSeen=true;
   const priorOrientationAt=sensor.orientationLast;
   sensor.orientationAlpha=e.alpha;sensor.orientationBeta=e.beta;sensor.orientationGamma=e.gamma;sensor.orientationAbsolute=!!e.absolute;sensor.screenAngle=screen.orientation?.angle||window.orientation||0;
-  const alpha=rad(e.alpha),beta=rad(e.beta),gamma=rad(e.gamma),orient=rad(sensor.screenAngle);sensor.rawHeading=alpha;
+  const alpha=rad(e.alpha),beta=rad(e.beta),gamma=rad(e.gamma),orient=rad(sensor.screenAngle);
   const eu=new THREE.Euler(beta,alpha,-gamma,'YXZ');const q=new THREE.Quaternion().setFromEuler(eu);
   q.multiply(new THREE.Quaternion(-Math.sqrt(.5),0,0,Math.sqrt(.5)));
   q.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,1),-orient));
@@ -790,7 +832,7 @@ function onOrientation(e){
 
   // Follow the user continuously while the phone is in hand by canceling only heading.
   // beginCapture() freezes that heading so the throw's real spin direction remains visible.
-  updateHeadingCompensation(q,alpha);
+  updateHeadingCompensation(q);
   if(!sensor.capturing)liveQuat.copy(sensor.relativeOrientationQ);
 
   if(sensor.armed&&!sensor.capturing)considerCapture(now,sensor.accel,sensor.orientationSpeed,sensor.linearAccel,sensor.jerk,'orientation');
@@ -921,12 +963,12 @@ function updateNerdDashboard(now=performance.now(),force=false){
 }
 function clearOrientationReference(){
   sensor.headingLocked=false;sensor.orientationReferenceReady=false;sensor.orientationReferenceQ.identity();
-  sensor.relativeOrientationQ.identity();sensor.headingYaw=0;sensor.rawHeading=0;sensor.orientationLast=0;sensor.orientationRate.set(0,0,0);sensor.orientationSpeed=0;
+  sensor.relativeOrientationQ.identity();sensor.headingYaw=0;sensor.rawHeading=0;sensor.headingConfidence=0;sensor.orientationLast=0;sensor.orientationRate.set(0,0,0);sensor.orientationSpeed=0;
 }
 function resetOrientationReference(useCurrent=true){
   sensor.headingLocked=false;
   if(useCurrent&&sensor.orientationSeen){
-    updateHeadingCompensation(sensor.orientationQ,sensor.rawHeading,true);
+    updateHeadingCompensation(sensor.orientationQ,true);
     liveQuat.copy(sensor.relativeOrientationQ);displayQuat.copy(sensor.relativeOrientationQ);
     sensor.prevOrientationQ.copy(sensor.orientationQ);sensor.orientationLast=performance.now();
   }else clearOrientationReference();
