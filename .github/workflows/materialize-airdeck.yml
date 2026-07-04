@@ -20,6 +20,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Rebuild the complete single-file app so the browser does not fetch payload chunks.
           cat assets/airdeck-throw-state-1.txt assets/airdeck-throw-state-2.txt \
             | tr -d '\r\n' \
             | base64 --decode \
