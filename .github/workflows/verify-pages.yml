@@ -18,7 +18,18 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - name: Wait for the standalone app
+      - name: Verify immutable payload sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://raw.githubusercontent.com/Brandon-Valley/AirDeck/a058d148ad03dc5549bf283843223ccd228a1f25/assets"
+          for file in airdeck-throw-state-1.txt airdeck-throw-state-2.txt; do
+            bytes="$(curl --fail --silent --show-error --location --max-time 30 "$base/$file" | wc -c)"
+            test "$bytes" -gt 10000
+            echo "$file: $bytes bytes"
+          done
+
+      - name: Wait for the fixed loader
         shell: bash
         run: |
           set -euo pipefail
@@ -26,15 +37,14 @@ jobs:
             page="$(curl --fail --silent --show-error --location --max-time 20 \
               -H 'Cache-Control: no-cache' \
               "https://brandon-valley.github.io/AirDeck/?deploy=${GITHUB_SHA}-${attempt}" || true)"
-            bytes="$(printf '%s' "$page" | wc -c)"
-            if printf '%s' "$page" | grep -q 'airdeck-build" content="2026-07-04-throw-state-machine-standalone"' \
-              && [ "$bytes" -gt 80000 ]; then
-              echo "Verified standalone deployed build on attempt ${attempt}: ${bytes} bytes."
+            if printf '%s' "$page" | grep -q 'airdeck-loader-build" content="2026-07-04-loader-fetch-fix"' \
+              && printf '%s' "$page" | grep -q 'raw.githubusercontent.com/Brandon-Valley/AirDeck/a058d148ad03dc5549bf283843223ccd228a1f25'; then
+              echo "Verified fixed loader on attempt ${attempt}."
               exit 0
             fi
             sleep 10
           done
-          echo "The complete standalone AirDeck build did not appear on GitHub Pages in time." >&2
+          echo "The fixed AirDeck loader did not appear on GitHub Pages in time." >&2
           exit 1
 
       - name: Record successful verification
@@ -57,7 +67,7 @@ jobs:
             }
             const payload = {
               verified_commit: process.env.VERIFIED_SHA,
-              verified_build: '2026-07-04-throw-state-machine-standalone',
+              verified_build: '2026-07-04-loader-fetch-fix',
               verified_url: 'https://brandon-valley.github.io/AirDeck/',
               verified_at: new Date().toISOString()
             };
