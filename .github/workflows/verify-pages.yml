@@ -26,7 +26,7 @@ jobs:
             page="$(curl --fail --silent --show-error --location --max-time 20 \
               -H 'Cache-Control: no-cache' \
               "https://brandon-valley.github.io/AirDeck/?deploy=${GITHUB_SHA}-${attempt}" || true)"
-            if printf '%s' "$page" | grep -q 'airdeck-loader-build" content="2026-07-04-nerd-out"'; then
+            if printf '%s' "$page" | grep -q 'airdeck-loader-build" content="2026-07-04-relative-orientation"'; then
               echo "Verified deployed build on attempt ${attempt}."
               exit 0
             fi
@@ -55,7 +55,7 @@ jobs:
             }
             const payload = {
               verified_commit: process.env.VERIFIED_SHA,
-              verified_build: '2026-07-04-nerd-out',
+              verified_build: '2026-07-04-relative-orientation',
               verified_url: 'https://brandon-valley.github.io/AirDeck/',
               verified_at: new Date().toISOString()
             };
