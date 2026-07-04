@@ -1,2 +1,2 @@
-2026-07-04-throw-catch-state-machine
-deploy-check=airdeck-20260704-1545
+2026-07-04-heading-follow-lock
+deploy-check=airdeck-heading-follow-20260704
