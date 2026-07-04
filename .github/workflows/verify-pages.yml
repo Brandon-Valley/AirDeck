@@ -1,56 +1,108 @@
-name: Verify GitHub Pages deployment
+name: Build and verify GitHub Pages
 
 on:
   push:
     branches: [master]
     paths:
       - index.html
+      - assets/airdeck-throw-state-1.txt
+      - assets/airdeck-throw-state-2.txt
       - .github/workflows/verify-pages.yml
 
 permissions:
   contents: write
 
 concurrency:
-  group: verify-airdeck-pages
+  group: build-and-verify-airdeck
   cancel-in-progress: true
 
 jobs:
-  verify:
+  build-and-verify:
     runs-on: ubuntu-latest
     steps:
-      - name: Verify immutable payload sources
-        shell: bash
-        run: |
-          set -euo pipefail
-          base="https://raw.githubusercontent.com/Brandon-Valley/AirDeck/a058d148ad03dc5549bf283843223ccd228a1f25/assets"
-          for file in airdeck-throw-state-1.txt airdeck-throw-state-2.txt; do
-            bytes="$(curl --fail --silent --show-error --location --max-time 30 "$base/$file" | wc -c)"
-            test "$bytes" -gt 10000
-            echo "$file: $bytes bytes"
-          done
+      - uses: actions/checkout@v4
 
-      - name: Wait for the fixed loader
+      - name: Materialize complete standalone index.html
         shell: bash
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 36); do
+
+          if grep -q 'airdeck-build" content="2026-07-04-standalone-fetch-fix"' index.html \
+            && [ "$(wc -c < index.html)" -gt 80000 ]; then
+            echo "Standalone app is already materialized."
+            exit 0
+          fi
+
+          cat assets/airdeck-throw-state-1.txt assets/airdeck-throw-state-2.txt \
+            | tr -d '\r\n' \
+            | base64 --decode \
+            | gzip --decompress \
+            > index.html
+
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('index.html')
+          text = path.read_text()
+          old = '<meta name="airdeck-build" content="2026-07-04-throw-state-machine" />'
+          new = '<meta name="airdeck-build" content="2026-07-04-standalone-fetch-fix" />'
+          if old not in text:
+              raise SystemExit('Expected AirDeck build marker was not found')
+          path.write_text(text.replace(old, new, 1))
+          PY
+
+          grep -q '2026-07-04-standalone-fetch-fix' index.html
+          test "$(wc -c < index.html)" -gt 80000
+
+      - name: Validate JavaScript
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          text = Path('index.html').read_text()
+          scripts = re.findall(r'<script type="module">(.*?)</script>', text, re.S)
+          if len(scripts) != 1:
+              raise SystemExit(f'Expected one module script, found {len(scripts)}')
+          Path('/tmp/airdeck.mjs').write_text(scripts[0])
+          PY
+          node --check /tmp/airdeck.mjs
+
+      - name: Commit materialized app when needed
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- index.html; then
+            echo "No index.html change to commit."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add index.html
+            git commit -m "Embed complete standalone AirDeck app"
+            git push origin master
+          fi
+
+      - name: Wait for standalone app on GitHub Pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 48); do
             page="$(curl --fail --silent --show-error --location --max-time 20 \
               -H 'Cache-Control: no-cache' \
-              "https://brandon-valley.github.io/AirDeck/?deploy=${GITHUB_SHA}-${attempt}" || true)"
-            if printf '%s' "$page" | grep -q 'airdeck-loader-build" content="2026-07-04-loader-fetch-fix"' \
-              && printf '%s' "$page" | grep -q 'raw.githubusercontent.com/Brandon-Valley/AirDeck/a058d148ad03dc5549bf283843223ccd228a1f25'; then
-              echo "Verified fixed loader on attempt ${attempt}."
+              "https://brandon-valley.github.io/AirDeck/?deploy=${GITHUB_RUN_ID}-${attempt}" || true)"
+            bytes="$(printf '%s' "$page" | wc -c)"
+            if printf '%s' "$page" | grep -q 'airdeck-build" content="2026-07-04-standalone-fetch-fix"' \
+              && [ "$bytes" -gt 80000 ]; then
+              echo "Verified standalone AirDeck on attempt ${attempt}: ${bytes} bytes."
               exit 0
             fi
             sleep 10
           done
-          echo "The fixed AirDeck loader did not appear on GitHub Pages in time." >&2
+          echo "Standalone AirDeck did not appear on GitHub Pages in time." >&2
           exit 1
 
       - name: Record successful verification
         uses: actions/github-script@v7
-        env:
-          VERIFIED_SHA: ${{ github.sha }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -66,8 +118,8 @@ jobs:
               if (error.status !== 404) throw error;
             }
             const payload = {
-              verified_commit: process.env.VERIFIED_SHA,
-              verified_build: '2026-07-04-loader-fetch-fix',
+              verified_commit: context.sha,
+              verified_build: '2026-07-04-standalone-fetch-fix',
               verified_url: 'https://brandon-valley.github.io/AirDeck/',
               verified_at: new Date().toISOString()
             };
