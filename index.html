@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
 <meta name="theme-color" content="#0a0a0d" />
-<meta name="airdeck-build" content="2026-07-04-throw-catch-state-machine" />
+<meta name="airdeck-build" content="2026-07-04-heading-follow-lock" />
 <title>AIR DECK '99</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Space+Grotesk:wght@500;700&display=swap');
@@ -287,6 +287,8 @@
               <div class="nerd-row"><span>Gamma</span><b id="nGamma">0.0</b></div>
               <div class="nerd-row"><span>Screen</span><b id="nScreen">0</b></div>
               <div class="nerd-row"><span>Absolute</span><b id="nAbsolute">NO</b></div>
+              <div class="nerd-row"><span>Heading deg</span><b id="nHeadingDeg">0.0</b></div>
+              <div class="nerd-row"><span>Heading mode</span><b id="nHeadingMode">FOLLOW</b></div>
             </section>
             <section class="nerd-card"><h4>Relative quaternion</h4>
               <div class="nerd-row"><span>X</span><b id="nQx">0.000</b></div>
@@ -368,6 +370,7 @@
     <h2>HOW IT READS A TRICK</h2>
     <p><b>Roll</b> around the phone's long edge becomes kickflips or heelflips. <b>Flip</b> end-over-end becomes frontflips or backflips. <b>Spin</b> while screen-up becomes shove-its. Mixed axes become combo tricks.</p>
     <p>Tap <b>ARM THROW</b>, hold steady for a moment, then toss. The app ignores handling movement and only counts an attempt after it sees a launch, real airtime, and a separate catch or settled landing.</p>
+    <p><b>Heading behavior:</b> while the phone is in your hand, only compass heading follows you so the screen side stays pointed toward you. Pitch and roll remain real. A detected throw freezes heading until the catch.</p>
     <p><b>Browser note:</b> if motion events are blocked from a local file, serve this same HTML over HTTPS or use Trick Lab to test every game mode.</p>
     <p class="tiny">3D asset credits and alternative asset links are included in the chat message that came with this file. The game uses original UI, rules logic, and synthesized sound effects.</p>
   </div>
@@ -690,6 +693,7 @@ const sensor={
   startedBy:'',samples:[],q:new THREE.Quaternion(),orientationQ:new THREE.Quaternion(),
   prevOrientationQ:new THREE.Quaternion(),captureOrientationBase:new THREE.Quaternion(),
   orientationReferenceQ:new THREE.Quaternion(),relativeOrientationQ:new THREE.Quaternion(),orientationReferenceReady:false,
+  headingYaw:0,headingLocked:false,
   orientationSeen:false,orientationLast:0,orientationSpeed:0,eventCount:0,motionEventCount:0,orientationEventCount:0,
   lastEventAt:0,lastSampleAt:0,lastNerdDraw:0,hasAcceleration:false,hasRotationRate:false
 };
@@ -733,6 +737,36 @@ function quaternionRate(prev,current,dt,out){
   out.set(dq.x/sinHalf,dq.y/sinHalf,dq.z/sinHalf).multiplyScalar(angle/dt);
   return out;
 }
+const headingAxis=new THREE.Vector3(0,1,0);
+const headingProbe=new THREE.Vector3();
+function screenHeading(q,fallback=0){
+  headingProbe.set(0,0,1).applyQuaternion(q);
+  const horizontal=Math.hypot(headingProbe.x,headingProbe.z);
+  if(horizontal<.08)return fallback;
+  return Math.atan2(headingProbe.x,headingProbe.z);
+}
+function updateHeadingCompensation(q,force=false){
+  // In-hand behavior: continuously remove only compass heading. Pitch and roll remain real.
+  if(force||!sensor.orientationReferenceReady||!sensor.headingLocked){
+    sensor.headingYaw=screenHeading(q,sensor.headingYaw);
+    sensor.orientationReferenceQ.setFromAxisAngle(headingAxis,sensor.headingYaw);
+    sensor.orientationReferenceReady=true;
+  }
+  sensor.relativeOrientationQ.copy(sensor.orientationReferenceQ).invert().multiply(q).normalize();
+  return sensor.relativeOrientationQ;
+}
+function lockHeadingForThrow(){
+  if(!sensor.orientationReferenceReady)updateHeadingCompensation(sensor.orientationQ,true);
+  sensor.headingLocked=true;
+  updateHeadingCompensation(sensor.orientationQ,false);
+}
+function unlockHeadingAfterThrow(){
+  sensor.headingLocked=false;
+  if(sensor.orientationSeen){
+    updateHeadingCompensation(sensor.orientationQ,true);
+    liveQuat.copy(sensor.relativeOrientationQ);
+  }
+}
 function markSensorLive(){
   if(sensor.eventCount===1){$('#sensorState').textContent='motion live';$('#sensorDot').style.color='var(--good)';}
   syncNerdButtons();
@@ -753,17 +787,10 @@ function onOrientation(e){
   }
   sensor.orientationLast=now;sensor.prevOrientationQ.copy(q);sensor.orientationQ.copy(q);
 
-  // Treat the first valid orientation after a page/mode reset as straight ahead.
-  // This deliberately removes compass heading, so facing north or south starts identically.
-  if(!sensor.orientationReferenceReady){
-    sensor.orientationReferenceQ.copy(q).normalize();
-    sensor.orientationReferenceReady=true;
-    sensor.relativeOrientationQ.identity();
-    liveQuat.identity();displayQuat.identity();
-  }else{
-    sensor.relativeOrientationQ.copy(sensor.orientationReferenceQ).invert().multiply(q).normalize();
-    if(!sensor.capturing)liveQuat.copy(sensor.relativeOrientationQ);
-  }
+  // Follow the user continuously while the phone is in hand by canceling only heading.
+  // beginCapture() freezes that heading so the throw's real spin direction remains visible.
+  updateHeadingCompensation(q);
+  if(!sensor.capturing)liveQuat.copy(sensor.relativeOrientationQ);
 
   if(sensor.armed&&!sensor.capturing)considerCapture(now,sensor.accel,sensor.orientationSpeed,sensor.linearAccel,sensor.jerk,'orientation');
   if(sensor.capturing&&now-sensor.lastSampleAt>28){
@@ -881,7 +908,7 @@ function updateNerdDashboard(now=performance.now(),force=false){
   const impact=sensor.accel>14.2||sensor.jerk>62;
   const signal=impact?'IMPACT':freefall?'FREEFALL':rotating?'ROTATING':launched?'LAUNCH':'IDLE';
   const capture=sensor.capturing?(sensor.seenAirborne?'AIRBORNE':'LAUNCH CHECK'):sensor.armed?(sensor.armReady?'WAITING':'SETTLING'):sensor.liveEnabled?'LIVE':'OFF';
-  nerdValue('nAlpha',fmt(sensor.orientationAlpha));nerdValue('nBeta',fmt(sensor.orientationBeta));nerdValue('nGamma',fmt(sensor.orientationGamma));nerdValue('nScreen',fmt(sensor.screenAngle,0));nerdValue('nAbsolute',sensor.orientationAbsolute?'YES':'NO',sensor.orientationAbsolute?'good':'');
+  nerdValue('nAlpha',fmt(sensor.orientationAlpha));nerdValue('nBeta',fmt(sensor.orientationBeta));nerdValue('nGamma',fmt(sensor.orientationGamma));nerdValue('nScreen',fmt(sensor.screenAngle,0));nerdValue('nAbsolute',sensor.orientationAbsolute?'YES':'NO',sensor.orientationAbsolute?'good':'');nerdValue('nHeadingDeg',fmt(deg(sensor.headingYaw)));nerdValue('nHeadingMode',sensor.headingLocked?'LOCKED':'FOLLOW',sensor.headingLocked?'warn':'good');
   nerdValue('nQx',fmt(q.x,3));nerdValue('nQy',fmt(q.y,3));nerdValue('nQz',fmt(q.z,3));nerdValue('nQw',fmt(q.w,3));
   nerdValue('nRateX',fmt(deg(rv.x)));nerdValue('nRateY',fmt(deg(rv.y)));nerdValue('nRateZ',fmt(deg(rv.z)));nerdValue('nRateMag',fmt(speed));nerdValue('nRateSource',rateSource);
   nerdValue('nGravX',fmt(av.x,2));nerdValue('nGravY',fmt(av.y,2));nerdValue('nGravZ',fmt(av.z,2));nerdValue('nGravMag',fmt(sensor.accel,2),freefall?'warn':'');nerdValue('nAccelAvail',sensor.hasAcceleration?'YES':'NO',sensor.hasAcceleration?'good':'warn');
@@ -892,17 +919,18 @@ function updateNerdDashboard(now=performance.now(),force=false){
   syncNerdButtons();
 }
 function clearOrientationReference(){
-  sensor.orientationReferenceReady=false;sensor.orientationReferenceQ.identity();sensor.relativeOrientationQ.identity();
-  liveQuat.identity();displayQuat.identity();sensor.orientationLast=0;sensor.orientationRate.set(0,0,0);sensor.orientationSpeed=0;
+  sensor.headingLocked=false;sensor.orientationReferenceReady=false;sensor.orientationReferenceQ.identity();
+  sensor.relativeOrientationQ.identity();sensor.headingYaw=0;sensor.orientationLast=0;sensor.orientationRate.set(0,0,0);sensor.orientationSpeed=0;
 }
 function resetOrientationReference(useCurrent=true){
+  sensor.headingLocked=false;
   if(useCurrent&&sensor.orientationSeen){
-    sensor.orientationReferenceQ.copy(sensor.orientationQ).normalize();sensor.orientationReferenceReady=true;
-    sensor.relativeOrientationQ.identity();liveQuat.identity();displayQuat.identity();
+    updateHeadingCompensation(sensor.orientationQ,true);
+    liveQuat.copy(sensor.relativeOrientationQ);displayQuat.copy(sensor.relativeOrientationQ);
     sensor.prevOrientationQ.copy(sensor.orientationQ);sensor.orientationLast=performance.now();
   }else clearOrientationReference();
 }
-function resetNerdPeaks(){sensor.peak=sensor.accel;sensor.impactPeak=sensor.jerk;sensor.eventCount=0;sensor.motionEventCount=0;sensor.orientationEventCount=0;resetOrientationReference(true);updateNerdDashboard(performance.now(),true);showToast('Counters reset. Current phone direction is now straight ahead.');}
+function resetNerdPeaks(){sensor.peak=sensor.accel;sensor.impactPeak=sensor.jerk;sensor.eventCount=0;sensor.motionEventCount=0;sensor.orientationEventCount=0;resetOrientationReference(true);updateNerdDashboard(performance.now(),true);showToast('Counters reset. Heading recentered; pitch and roll were preserved.');}
 async function armThrow(){
   if(sensor.capturing){
     if(sensor.seenAirborne)finishCapture(true);
@@ -932,15 +960,17 @@ async function armThrow(){
   }
 }
 function beginCapture(reason){
-  sensor.capturing=true;sensor.armed=false;sensor.armReady=false;sensor.start=performance.now();sensor.q.identity();sensor.samples=[];
+  lockHeadingForThrow();
+  sensor.capturing=true;sensor.armed=false;sensor.armReady=false;sensor.start=performance.now();sensor.q.copy(sensor.relativeOrientationQ);sensor.samples=[];
   sensor.peak=sensor.accel;sensor.impactPeak=sensor.jerk;sensor.quiet=0;sensor.airborneHold=0;sensor.seenAirborne=false;sensor.airborneAt=0;
-  sensor.throwPhase='launch-check';sensor.startedBy=reason;sensor.lastSampleAt=0;liveQuat.identity();
+  sensor.throwPhase='launch-check';sensor.startedBy=reason;sensor.lastSampleAt=0;liveQuat.copy(sensor.q);
   sensor.captureOrientationBase.copy(sensor.orientationQ);
+  sensor.samples.push({t:0,q:[sensor.q.x,sensor.q.y,sensor.q.z,sensor.q.w],r:[0,0,0],a:sensor.accel});
   $('#armBtn').classList.add('armed');$('#armBtn').textContent='CANCEL';$('#statusTitle').textContent='LAUNCH DETECTED';
-  $('#statusSub').textContent='Checking for real airtime. Handling movement will be ignored automatically.';
+  $('#statusSub').textContent='Heading locked for the throw. Checking for real airtime.';
 }
 function cancelCapture(rearm,message){
-  sensor.capturing=false;sensor.samples=[];sensor.q.identity();resetThrowDetector();sensor.falseStarts++;
+  sensor.capturing=false;sensor.samples=[];sensor.q.identity();resetThrowDetector();sensor.falseStarts++;unlockHeadingAfterThrow();
   if(rearm){
     sensor.armed=true;sensor.armReady=true;sensor.throwPhase='waiting';sensor.armTime=performance.now();
     $('#armBtn').classList.add('armed');$('#armBtn').textContent='THROW NOW';$('#statusTitle').textContent='READY — TOSS NOW';
@@ -955,11 +985,11 @@ function finishCapture(manual){
   if(!sensor.capturing)return;
   if(!sensor.seenAirborne){cancelCapture(false,'No airtime detected. Attempt was not counted.');return;}
   sensor.capturing=false;sensor.armed=false;sensor.armReady=false;sensor.throwPhase='idle';$('#armBtn').classList.remove('armed');$('#armBtn').textContent='ARM THROW';
-  const elapsed=performance.now()-sensor.start;const result=classifySamples(sensor.samples,sensor.q,elapsed,sensor.peak,manual);processResult(result);sensor.samples=[];
+  const elapsed=performance.now()-sensor.start;const result=classifySamples(sensor.samples,sensor.q,elapsed,sensor.peak,manual);sensor.samples=[];unlockHeadingAfterThrow();processResult(result);
 }
 function calibrate(){
   sensor.q.identity();resetOrientationReference(true);
-  showToast('Orientation reset. The current phone direction is now straight ahead.');navigator.vibrate?.(25);
+  showToast('Heading recentered. Pitch and roll stay tied to the real phone.');navigator.vibrate?.(25);
 }
 
 function classifySamples(samples,q,airtime,peak,manual=false){
@@ -1062,11 +1092,11 @@ function skipTarget(){
   updateHUD();beep(140,.09,'square');
 }
 function endRun(title='RUN COMPLETE',summary='Score '+game.score.toLocaleString()){
-  if(!game.active)return;game.active=false;clearGameTimers();clearInterval(game.blitzTimer);sensor.armed=false;sensor.capturing=false;$('#armBtn').classList.remove('armed');$('#armBtn').textContent='ARM THROW';
+  if(!game.active)return;game.active=false;clearGameTimers();clearInterval(game.blitzTimer);sensor.armed=false;sensor.capturing=false;unlockHeadingAfterThrow();$('#armBtn').classList.remove('armed');$('#armBtn').textContent='ARM THROW';
   $('#endTitle').textContent=title;$('#endSummary').textContent=summary+' Final score: '+game.score.toLocaleString()+'. Attempts: '+game.attempts+'.';$('#endOverlay').classList.add('show');
   const key='airdeck_best_'+game.mode;const best=Number(localStorage.getItem(key)||0);if(game.score>best)localStorage.setItem(key,game.score);
 }
-function goHome(){clearGameTimers();clearInterval(game.blitzTimer);clearTimeout(resultTimer);$('#resultSlam').classList.remove('show');$('#confetti').innerHTML='';game.active=false;$('#endOverlay').classList.remove('show');$('#playScreen').classList.remove('active','nerd-mode');$('#homeScreen').classList.add('active');}
+function goHome(){clearGameTimers();clearInterval(game.blitzTimer);clearTimeout(resultTimer);$('#resultSlam').classList.remove('show');$('#confetti').innerHTML='';game.active=false;sensor.armed=false;sensor.capturing=false;unlockHeadingAfterThrow();$('#endOverlay').classList.remove('show');$('#playScreen').classList.remove('active','nerd-mode');$('#homeScreen').classList.add('active');}
 
 /* Sound */
 let audioCtx;
