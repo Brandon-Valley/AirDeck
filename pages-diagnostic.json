@@ -1,0 +1,27 @@
+{
+  "checked_at": "2026-07-04T17:54:28.208Z",
+  "expected_build": "2026-07-04-stable-heading-lock",
+  "pages": {
+    "url": "https://api.github.com/repos/Brandon-Valley/AirDeck/pages",
+    "status": "building",
+    "cname": null,
+    "custom_404": false,
+    "html_url": "https://brandon-valley.github.io/AirDeck/",
+    "build_type": "legacy",
+    "source": {
+      "branch": "master",
+      "path": "/"
+    },
+    "public": true,
+    "protected_domain_state": null,
+    "pending_domain_unverified_at": null,
+    "https_enforced": true
+  },
+  "rebuild_request": {
+    "status": 201,
+    "data": {
+      "status": "queued",
+      "url": "https://api.github.com/repositories/1288493171/pages/builds/latest"
+    }
+  }
+}
