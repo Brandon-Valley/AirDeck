@@ -1,4 +1,4 @@
-name: Apply and verify AirDeck tilt-stable heading
+name: Apply and verify AirDeck fullscreen launch
 
 on:
   push:
@@ -11,12 +11,12 @@ permissions:
   pages: write
 
 concurrency:
-  group: apply-airdeck-tilt-stable-heading
+  group: apply-airdeck-fullscreen-launch
   cancel-in-progress: true
 
 jobs:
   apply-and-verify:
-    if: github.event.head_commit.message == 'Install AirDeck tilt-stable heading patch'
+    if: github.event.head_commit.message == 'Install AirDeck fullscreen launch patch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,145 +38,74 @@ jobs:
                   raise SystemExit(f'{label}: expected one match, found {count}')
               text = text.replace(old, new, 1)
 
-          replace_once('2026-07-04-stable-heading-lock', '2026-07-04-tilt-stable-heading', 'build marker')
+          replace_once('2026-07-04-tilt-stable-heading', '2026-07-04-fullscreen-launch', 'build marker')
           replace_once(
-              'headingYaw:0,rawHeading:0,headingLocked:false,',
-              'headingYaw:0,rawHeading:0,headingConfidence:0,headingLocked:false,',
-              'heading state',
+              '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />',
+              '<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />\n<meta name="mobile-web-app-capable" content="yes" />\n<meta name="apple-mobile-web-app-capable" content="yes" />\n<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />',
+              'mobile viewport metadata',
           )
           replace_once(
-          '''const headingAxis=new THREE.Vector3(0,1,0);
-          function unwrapHeading(next,previous){
-            if(!Number.isFinite(previous))return next;
-            while(next-previous>Math.PI)next-=Math.PI*2;
-            while(next-previous<-Math.PI)next+=Math.PI*2;
-            return next;
-          }
-          function updateHeadingCompensation(q,rawHeading=sensor.rawHeading,force=false){
-            // DeviceOrientation alpha is the world-vertical heading component used to build q.
-            // Removing alpha directly preserves the phone's real pitch and roll, even when flat.
-            if(force||!sensor.orientationReferenceReady||!sensor.headingLocked){
-              sensor.rawHeading=rawHeading;
-              sensor.headingYaw=unwrapHeading(rawHeading,sensor.headingYaw);
-              sensor.orientationReferenceQ.setFromAxisAngle(headingAxis,sensor.headingYaw);
-              sensor.orientationReferenceReady=true;
+              'html,body{height:100%;height:100dvh;margin:0;background:var(--ink);color:var(--white);font-family:"Space Grotesk",system-ui,sans-serif;overflow:hidden}',
+              'html,body{width:100%;height:100%;height:100dvh;margin:0;background:var(--ink);color:var(--white);font-family:"Space Grotesk",system-ui,sans-serif;overflow:hidden;overscroll-behavior:none;touch-action:none}\n  body{position:fixed;inset:0;width:100%;min-height:100%;min-height:100dvh}',
+              'fixed fullscreen viewport css',
+          )
+          replace_once(
+              '  .app{height:100%;height:100dvh;display:flex;flex-direction:column;position:relative;background:',
+              '  .app{width:100%;height:100%;height:100dvh;display:flex;flex-direction:column;position:relative;background:',
+              'app fullscreen width',
+          )
+
+          fullscreen = r'''
+          /* Fullscreen */
+          let fullscreenPending=false;
+          async function enterAppFullscreen(){
+            if(document.fullscreenElement||document.webkitFullscreenElement)return true;
+            if(fullscreenPending)return false;
+            const el=document.documentElement;
+            const request=el.requestFullscreen?.bind(el)||el.webkitRequestFullscreen?.bind(el);
+            if(!request)return false;
+            fullscreenPending=true;
+            try{
+              const result=el.requestFullscreen?request({navigationUI:'hide'}):request();
+              if(result&&typeof result.then==='function')await result;
+              return true;
+            }catch(_){
+              return false;
+            }finally{
+              fullscreenPending=false;
+              resize3D();
             }
-            sensor.relativeOrientationQ.copy(sensor.orientationReferenceQ).invert().multiply(q).normalize();
-            return sensor.relativeOrientationQ;
           }
-          function lockHeadingForThrow(){
-            if(!sensor.orientationReferenceReady)updateHeadingCompensation(sensor.orientationQ,sensor.rawHeading,true);
-            sensor.headingLocked=true;
-            updateHeadingCompensation(sensor.orientationQ,sensor.rawHeading,false);
-          }
-          function unlockHeadingAfterThrow(){
-            sensor.headingLocked=false;
-            if(sensor.orientationSeen){
-              updateHeadingCompensation(sensor.orientationQ,sensor.rawHeading,true);
-              liveQuat.copy(sensor.relativeOrientationQ);
-            }
-          }''',
-          '''const headingAxis=new THREE.Vector3(0,1,0);
-          const headingFaceProbe=new THREE.Vector3();
-          const headingTopProbe=new THREE.Vector3();
-          function unwrapHeading(next,previous){
-            if(!Number.isFinite(previous))return next;
-            while(next-previous>Math.PI)next-=Math.PI*2;
-            while(next-previous<-Math.PI)next+=Math.PI*2;
-            return next;
-          }
-          function smoothstep01(v){v=clamp(v,0,1);return v*v*(3-2*v);}
-          function measuredScreenHeading(q,previous=0){
-            // Use the screen normal while upright and the phone's top edge while flat.
-            // DeviceOrientation alpha becomes unstable near upright, while the screen normal
-            // becomes unstable near flat. Blending these geometric directions avoids both snaps.
-            headingFaceProbe.set(0,0,1).applyQuaternion(q);
-            headingTopProbe.set(0,1,0).applyQuaternion(q);
-            const faceStrength=Math.hypot(headingFaceProbe.x,headingFaceProbe.z);
-            const edgeStrength=Math.hypot(headingTopProbe.x,headingTopProbe.z);
-            let faceAngle=null,edgeAngle=null;
-            if(faceStrength>.001)faceAngle=unwrapHeading(Math.atan2(headingFaceProbe.x,headingFaceProbe.z),previous);
-            if(edgeStrength>.001){
-              const raw=Math.atan2(headingTopProbe.x,headingTopProbe.z);
-              const reference=faceAngle!==null&&faceStrength>.12?faceAngle:previous;
-              const a=unwrapHeading(raw,reference),b=unwrapHeading(raw+Math.PI,reference);
-              edgeAngle=Math.abs(a-reference)<=Math.abs(b-reference)?a:b;
-              edgeAngle=unwrapHeading(edgeAngle,previous);
-            }
-            if(faceAngle===null&&edgeAngle===null)return {angle:previous,confidence:0};
-            if(faceAngle===null)return {angle:edgeAngle,confidence:edgeStrength};
-            if(edgeAngle===null)return {angle:faceAngle,confidence:faceStrength};
-            const edgeNearFace=unwrapHeading(edgeAngle,faceAngle);
-            const separation=Math.abs(edgeNearFace-faceAngle);
-            if(separation>Math.PI*.6){
-              const chosen=faceStrength>.22?faceAngle:edgeAngle;
-              return {angle:unwrapHeading(chosen,previous),confidence:Math.max(faceStrength,edgeStrength)};
-            }
-            const faceWeight=smoothstep01((faceStrength-.12)/.63);
-            const edgeWeight=1-faceWeight;
-            const x=Math.sin(faceAngle)*faceWeight+Math.sin(edgeNearFace)*edgeWeight;
-            const z=Math.cos(faceAngle)*faceWeight+Math.cos(edgeNearFace)*edgeWeight;
-            return {angle:unwrapHeading(Math.atan2(x,z),previous),confidence:Math.max(faceStrength,edgeStrength)};
-          }
-          function updateHeadingCompensation(q,force=false){
-            if(force||!sensor.orientationReferenceReady||!sensor.headingLocked){
-              const measured=measuredScreenHeading(q,sensor.headingYaw);
-              let next=measured.angle;
-              if(!force&&sensor.orientationReferenceReady){
-                let delta=unwrapHeading(next,sensor.headingYaw)-sensor.headingYaw;
-                if(Math.abs(delta)>rad(55))delta=0;
-                delta=clamp(delta,-rad(16),rad(16));
-                next=sensor.headingYaw+delta*.88;
+          function requestFullscreenFromGesture(){
+            enterAppFullscreen().then(ok=>{
+              if(ok){
+                document.removeEventListener('pointerdown',requestFullscreenFromGesture,true);
+                document.removeEventListener('click',requestFullscreenFromGesture,true);
               }
-              sensor.rawHeading=measured.angle;
-              sensor.headingConfidence=measured.confidence;
-              sensor.headingYaw=next;
-              sensor.orientationReferenceQ.setFromAxisAngle(headingAxis,sensor.headingYaw);
-              sensor.orientationReferenceReady=true;
-            }
-            sensor.relativeOrientationQ.copy(sensor.orientationReferenceQ).invert().multiply(q).normalize();
-            return sensor.relativeOrientationQ;
+            });
           }
-          function lockHeadingForThrow(){
-            if(!sensor.orientationReferenceReady)updateHeadingCompensation(sensor.orientationQ,true);
-            sensor.headingLocked=true;
-            updateHeadingCompensation(sensor.orientationQ,false);
-          }
-          function unlockHeadingAfterThrow(){
-            sensor.headingLocked=false;
-            if(sensor.orientationSeen){
-              updateHeadingCompensation(sensor.orientationQ,true);
-              liveQuat.copy(sensor.relativeOrientationQ);
-            }
-          }''',
-              'heading algorithm',
+          document.addEventListener('pointerdown',requestFullscreenFromGesture,true);
+          document.addEventListener('click',requestFullscreenFromGesture,true);
+          document.addEventListener('fullscreenchange',resize3D,{passive:true});
+          document.addEventListener('webkitfullscreenchange',resize3D,{passive:true});
+
+          '''
+          replace_once(
+              '/* UI events */\nbuildModes();buildSimulator();init3D();setDisplayModel(displayModel);',
+              fullscreen + '/* UI events */\nbuildModes();buildSimulator();init3D();setDisplayModel(displayModel);',
+              'fullscreen functions',
           )
           replace_once(
-              'const alpha=rad(e.alpha),beta=rad(e.beta),gamma=rad(e.gamma),orient=rad(sensor.screenAngle);sensor.rawHeading=alpha;',
-              'const alpha=rad(e.alpha),beta=rad(e.beta),gamma=rad(e.gamma),orient=rad(sensor.screenAngle);',
-              'raw alpha assignment',
-          )
-          replace_once('updateHeadingCompensation(q,alpha);', 'updateHeadingCompensation(q);', 'orientation call')
-          replace_once(
-              'updateHeadingCompensation(sensor.orientationQ,sensor.rawHeading,true);',
-              'updateHeadingCompensation(sensor.orientationQ,true);',
-              'manual reset call',
-          )
-          replace_once(
-              'sensor.relativeOrientationQ.identity();sensor.headingYaw=0;sensor.rawHeading=0;sensor.orientationLast=0;',
-              'sensor.relativeOrientationQ.identity();sensor.headingYaw=0;sensor.rawHeading=0;sensor.headingConfidence=0;sensor.orientationLast=0;',
-              'clear heading state',
-          )
-          replace_once(
-              'Heading behavior:</b> while the phone is in your hand, only compass heading follows you so the screen side stays pointed toward you. Pitch and roll remain real. A detected throw freezes heading until the catch.',
-              'Heading behavior:</b> while the phone is in your hand, heading follows you using a tilt-safe blend of the screen face and phone edge. Pitch and roll remain real. A detected throw freezes heading until the catch.',
-              'help wording',
+              "$('#safetyAccept').onclick=()=>{$('#safetyOverlay').classList.remove('show');beep(260,.05,'square');};",
+              "$('#safetyAccept').onclick=()=>{enterAppFullscreen();$('#safetyOverlay').classList.remove('show');beep(260,.05,'square');};",
+              'fullscreen entry button',
           )
 
           path.write_text(text)
           PY
-          grep -q 'airdeck-build" content="2026-07-04-tilt-stable-heading"' index.html
-          grep -q 'function measuredScreenHeading' index.html
+          grep -q 'airdeck-build" content="2026-07-04-fullscreen-launch"' index.html
+          grep -q 'requestFullscreen({navigationUI:' index.html
+          grep -q 'mobile-web-app-capable' index.html
           test "$(wc -c < index.html)" -gt 80000
 
       - name: Validate module JavaScript
@@ -201,7 +130,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add index.html
-          git commit -m "Prevent AirDeck heading snaps during phone tilt"
+          git commit -m "Open AirDeck in fullscreen on first tap"
           git push origin master
 
       - name: Rebuild and verify GitHub Pages
@@ -212,7 +141,7 @@ jobs:
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const branch = 'master';
-            const expected = '2026-07-04-tilt-stable-heading';
+            const expected = '2026-07-04-fullscreen-launch';
             const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
             try {
@@ -231,13 +160,13 @@ jobs:
                 latestBuild = { error_status: error.status, error_message: error.message };
               }
               try {
-                const response = await fetch(`https://brandon-valley.github.io/AirDeck/?tilt-stable=${context.runId}-${attempt}`, {
+                const response = await fetch(`https://brandon-valley.github.io/AirDeck/?fullscreen=${context.runId}-${attempt}`, {
                   headers: { 'cache-control': 'no-cache' },
                   redirect: 'follow'
                 });
-                const text = await response.text();
-                bytes = text.length;
-                if (response.ok && bytes > 80000 && text.includes(`airdeck-build\" content=\"${expected}`)) {
+                const html = await response.text();
+                bytes = html.length;
+                if (response.ok && bytes > 80000 && html.includes(`airdeck-build\" content=\"${expected}`)) {
                   verified = true;
                   break;
                 }
@@ -247,7 +176,7 @@ jobs:
               await sleep(10000);
             }
             if (!verified) {
-              core.setFailed('The tilt-stable build did not appear on the main Pages URL in time.');
+              core.setFailed('The fullscreen build did not appear on the main Pages URL in time.');
               return;
             }
 
@@ -263,14 +192,14 @@ jobs:
               verified_at: new Date().toISOString(),
               live_bytes: bytes,
               latest_pages_build: latestBuild,
-              verification: 'main Pages URL returned the complete standalone index with the expected build marker'
+              verification: 'main Pages URL returned the complete standalone index with the expected fullscreen build marker'
             };
             await github.rest.repos.createOrUpdateFileContents({
               owner,
               repo,
               path: 'deployment-verification.json',
               branch,
-              message: 'Record verified AirDeck tilt-stable heading deployment',
+              message: 'Record verified AirDeck fullscreen deployment',
               content: Buffer.from(JSON.stringify(payload, null, 2) + '\n').toString('base64'),
               ...(sha ? { sha } : {})
             });
