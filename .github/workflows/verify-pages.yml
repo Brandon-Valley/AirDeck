@@ -26,8 +26,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          build='2026-07-04-throw-catch-state-machine'
 
-          if grep -q 'airdeck-build" content="2026-07-04-standalone-fetch-fix"' index.html \
+          if grep -q "airdeck-build\" content=\"${build}" index.html \
             && [ "$(wc -c < index.html)" -gt 80000 ]; then
             echo "Standalone app is already materialized."
             exit 0
@@ -37,21 +38,11 @@ jobs:
             | tr -d '\r\n' \
             | base64 --decode \
             | gzip --decompress \
-            > index.html
+            > /tmp/airdeck-index.html
 
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('index.html')
-          text = path.read_text()
-          old = '<meta name="airdeck-build" content="2026-07-04-throw-state-machine" />'
-          new = '<meta name="airdeck-build" content="2026-07-04-standalone-fetch-fix" />'
-          if old not in text:
-              raise SystemExit('Expected AirDeck build marker was not found')
-          path.write_text(text.replace(old, new, 1))
-          PY
-
-          grep -q '2026-07-04-standalone-fetch-fix' index.html
-          test "$(wc -c < index.html)" -gt 80000
+          grep -q "airdeck-build\" content=\"${build}" /tmp/airdeck-index.html
+          test "$(wc -c < /tmp/airdeck-index.html)" -gt 80000
+          mv /tmp/airdeck-index.html index.html
 
       - name: Validate JavaScript
         shell: bash
@@ -78,27 +69,28 @@ jobs:
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add index.html
-            git commit -m "Embed complete standalone AirDeck app"
+            git commit -m "Deploy stricter AirDeck throw and catch detector"
             git push origin master
           fi
 
-      - name: Wait for standalone app on GitHub Pages
+      - name: Wait for updated app on GitHub Pages
         shell: bash
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 48); do
+          build='2026-07-04-throw-catch-state-machine'
+          for attempt in $(seq 1 60); do
             page="$(curl --fail --silent --show-error --location --max-time 20 \
               -H 'Cache-Control: no-cache' \
               "https://brandon-valley.github.io/AirDeck/?deploy=${GITHUB_RUN_ID}-${attempt}" || true)"
             bytes="$(printf '%s' "$page" | wc -c)"
-            if printf '%s' "$page" | grep -q 'airdeck-build" content="2026-07-04-standalone-fetch-fix"' \
+            if printf '%s' "$page" | grep -q "airdeck-build\" content=\"${build}" \
               && [ "$bytes" -gt 80000 ]; then
-              echo "Verified standalone AirDeck on attempt ${attempt}: ${bytes} bytes."
+              echo "Verified AirDeck on attempt ${attempt}: ${bytes} bytes."
               exit 0
             fi
             sleep 10
           done
-          echo "Standalone AirDeck did not appear on GitHub Pages in time." >&2
+          echo "Updated AirDeck did not appear on GitHub Pages in time." >&2
           exit 1
 
       - name: Record successful verification
@@ -119,7 +111,7 @@ jobs:
             }
             const payload = {
               verified_commit: context.sha,
-              verified_build: '2026-07-04-standalone-fetch-fix',
+              verified_build: '2026-07-04-throw-catch-state-machine',
               verified_url: 'https://brandon-valley.github.io/AirDeck/',
               verified_at: new Date().toISOString()
             };
