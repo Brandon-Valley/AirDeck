@@ -1,11 +1,11 @@
 {
-  "verified_build": "2026-07-04-stable-heading-lock",
+  "verified_build": "2026-07-04-tilt-stable-heading",
   "verified_url": "https://brandon-valley.github.io/AirDeck/",
-  "verified_at": "2026-07-04T17:54:29.310Z",
-  "live_bytes": 84844,
+  "verified_at": "2026-07-04T18:33:56.311Z",
+  "live_bytes": 87006,
   "latest_pages_build": {
-    "url": "https://api.github.com/repos/Brandon-Valley/AirDeck/pages/builds/1078831139",
-    "status": "building",
+    "url": "https://api.github.com/repos/Brandon-Valley/AirDeck/pages/builds/1078874326",
+    "status": "built",
     "error": {
       "message": null
     },
@@ -30,10 +30,10 @@
       "user_view_type": "public",
       "site_admin": false
     },
-    "commit": "a068d61a0f82b97372fa78981f5cba3030f3d5e7",
-    "duration": 0,
-    "created_at": "2026-07-04T17:54:27Z",
-    "updated_at": "2026-07-04T17:54:27Z"
+    "commit": "67e4d1f5094d1ea1ab7f29acce053f09946ffbe7",
+    "duration": 31068,
+    "created_at": "2026-07-04T18:33:25Z",
+    "updated_at": "2026-07-04T18:33:56Z"
   },
   "verification": "main Pages URL returned the complete standalone index with the expected build marker"
 }
