@@ -1,39 +1,6 @@
 {
-  "verified_build": "2026-07-04-tilt-stable-heading",
+  "verified_build": "2026-07-04-fullscreen-launch",
   "verified_url": "https://brandon-valley.github.io/AirDeck/",
-  "verified_at": "2026-07-04T18:33:56.311Z",
-  "live_bytes": 87006,
-  "latest_pages_build": {
-    "url": "https://api.github.com/repos/Brandon-Valley/AirDeck/pages/builds/1078874326",
-    "status": "built",
-    "error": {
-      "message": null
-    },
-    "pusher": {
-      "login": "github-actions[bot]",
-      "id": 41898282,
-      "node_id": "MDM6Qm90NDE4OTgyODI=",
-      "avatar_url": "https://avatars.githubusercontent.com/in/15368?v=4",
-      "gravatar_id": "",
-      "url": "https://api.github.com/users/github-actions%5Bbot%5D",
-      "html_url": "https://github.com/apps/github-actions",
-      "followers_url": "https://api.github.com/users/github-actions%5Bbot%5D/followers",
-      "following_url": "https://api.github.com/users/github-actions%5Bbot%5D/following{/other_user}",
-      "gists_url": "https://api.github.com/users/github-actions%5Bbot%5D/gists{/gist_id}",
-      "starred_url": "https://api.github.com/users/github-actions%5Bbot%5D/starred{/owner}{/repo}",
-      "subscriptions_url": "https://api.github.com/users/github-actions%5Bbot%5D/subscriptions",
-      "organizations_url": "https://api.github.com/users/github-actions%5Bbot%5D/orgs",
-      "repos_url": "https://api.github.com/users/github-actions%5Bbot%5D/repos",
-      "events_url": "https://api.github.com/users/github-actions%5Bbot%5D/events{/privacy}",
-      "received_events_url": "https://api.github.com/users/github-actions%5Bbot%5D/received_events",
-      "type": "Bot",
-      "user_view_type": "public",
-      "site_admin": false
-    },
-    "commit": "67e4d1f5094d1ea1ab7f29acce053f09946ffbe7",
-    "duration": 31068,
-    "created_at": "2026-07-04T18:33:25Z",
-    "updated_at": "2026-07-04T18:33:56Z"
-  },
-  "verification": "main Pages URL returned the complete standalone index with the expected build marker"
+  "verified_at": "2026-07-04T19:33:02.315Z",
+  "verification": "main Pages URL returned the fullscreen loader build marker"
 }
