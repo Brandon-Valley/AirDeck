@@ -18,22 +18,23 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - name: Wait for the new Pages build
+      - name: Wait for the standalone app
         shell: bash
         run: |
           set -euo pipefail
-          # This marker check confirms the exact AirDeck build is live, not merely committed.
           for attempt in $(seq 1 36); do
             page="$(curl --fail --silent --show-error --location --max-time 20 \
               -H 'Cache-Control: no-cache' \
               "https://brandon-valley.github.io/AirDeck/?deploy=${GITHUB_SHA}-${attempt}" || true)"
-            if printf '%s' "$page" | grep -q 'airdeck-loader-build" content="2026-07-04-throw-state-machine"'; then
-              echo "Verified deployed build on attempt ${attempt}."
+            bytes="$(printf '%s' "$page" | wc -c)"
+            if printf '%s' "$page" | grep -q 'airdeck-build" content="2026-07-04-throw-state-machine-standalone"' \
+              && [ "$bytes" -gt 80000 ]; then
+              echo "Verified standalone deployed build on attempt ${attempt}: ${bytes} bytes."
               exit 0
             fi
             sleep 10
           done
-          echo "The expected build marker did not appear on GitHub Pages in time." >&2
+          echo "The complete standalone AirDeck build did not appear on GitHub Pages in time." >&2
           exit 1
 
       - name: Record successful verification
@@ -56,7 +57,7 @@ jobs:
             }
             const payload = {
               verified_commit: process.env.VERIFIED_SHA,
-              verified_build: '2026-07-04-throw-state-machine',
+              verified_build: '2026-07-04-throw-state-machine-standalone',
               verified_url: 'https://brandon-valley.github.io/AirDeck/',
               verified_at: new Date().toISOString()
             };
