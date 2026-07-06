@@ -6,6 +6,7 @@ on:
     paths:
       - index.html
       - independent-replay-verify-trigger.txt
+      - embedded-replay-verify-trigger.txt
       - .github/workflows/verify-pages.yml
 
 permissions:
