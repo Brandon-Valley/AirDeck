@@ -6,29 +6,30 @@ on:
     paths:
       - index.html
       - independent-replay-verify-trigger.txt
+      - .github/workflows/verify-pages.yml
 
 permissions:
   contents: write
   pages: write
 
 concurrency:
-  group: verify-airdeck-independent-replay
+  group: verify-airdeck-embedded-replay
   cancel-in-progress: true
 
 jobs:
   verify-pages:
-    if: github.event.head_commit.message != 'Record verified AirDeck independent replay deployment'
+    if: github.event.head_commit.message != 'Record verified AirDeck embedded replay deployment'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate loader
+      - name: Validate embedded build
         shell: bash
         run: |
           set -euo pipefail
-          grep -q 'airdeck-build" content="2026-07-04-independent-replay-altitude"' index.html
-          grep -q 'AirDeck replay patch failed validation' index.html
-          test "$(wc -c < index.html)" -gt 12000
+          grep -q 'airdeck-build" content="2026-07-06-embedded-independent-replay"' index.html
+          grep -q 'Embedded AirDeck data was damaged' index.html
+          test "$(wc -c < index.html)" -gt 30000
 
       - name: Request Pages rebuild
         uses: actions/github-script@v7
@@ -41,24 +42,24 @@ jobs:
               core.warning(`Pages rebuild request returned ${error.status || 'an error'}; continuing to verification.`);
             }
 
-      - name: Wait for build on main Pages URL
+      - name: Wait for embedded build on main Pages URL
         shell: bash
         run: |
           set -euo pipefail
-          expected='2026-07-04-independent-replay-altitude'
+          expected='2026-07-06-embedded-independent-replay'
           for attempt in $(seq 1 90); do
             page="$(curl --fail --silent --show-error --location --max-time 25 \
               -H 'Cache-Control: no-cache' \
-              "https://brandon-valley.github.io/AirDeck/?independent-replay=${GITHUB_RUN_ID}-${attempt}" || true)"
+              "https://brandon-valley.github.io/AirDeck/?embedded-replay=${GITHUB_RUN_ID}-${attempt}" || true)"
             bytes="$(printf '%s' "$page" | wc -c)"
             if printf '%s' "$page" | grep -q "airdeck-build\" content=\"${expected}" \
-              && [ "$bytes" -gt 12000 ]; then
-              echo "Verified AirDeck independent replay build on attempt ${attempt}: ${bytes} bytes."
+              && [ "$bytes" -gt 30000 ]; then
+              echo "Verified AirDeck embedded replay build on attempt ${attempt}: ${bytes} bytes."
               exit 0
             fi
             sleep 10
           done
-          echo "The independent-replay build did not appear on the main Pages URL in time." >&2
+          echo "The embedded-replay build did not appear on the main Pages URL in time." >&2
           exit 1
 
       - name: Record successful verification
@@ -77,17 +78,17 @@ jobs:
               if (error.status !== 404) throw error;
             }
             const payload = {
-              verified_build: '2026-07-04-independent-replay-altitude',
+              verified_build: '2026-07-06-embedded-independent-replay',
               verified_url: 'https://brandon-valley.github.io/AirDeck/',
               verified_at: new Date().toISOString(),
-              verification: 'main Pages URL returned the hash-checked independent replay loader marker'
+              verification: 'main Pages URL returned the self-contained embedded replay build marker'
             };
             await github.rest.repos.createOrUpdateFileContents({
               owner,
               repo,
               path,
               branch,
-              message: 'Record verified AirDeck independent replay deployment',
+              message: 'Record verified AirDeck embedded replay deployment',
               content: Buffer.from(JSON.stringify(payload, null, 2) + '\n').toString('base64'),
               ...(sha ? { sha } : {})
             });
